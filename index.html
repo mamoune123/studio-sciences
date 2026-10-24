@@ -1,0 +1,712 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f0b24">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Studio">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png">
+<title>Studio Sciences</title>
+<style>
+:root {
+  --bg: #0f0b24; --bg2: #171135; --card: #1d1645; --card2: #272059; --line: #3a3178;
+  --text: #f4f1ff; --muted: #a9a2d6; --dim: #6f68a3;
+  --accent: #ffcf3f; --accent-ink: #2a1d00; --violet: #7c6cff; --pink: #ff5fa2;
+  --ok: #3ddc97; --err: #ff6b7a; --warn: #ffb84d;
+  --r: 20px; --safe-b: env(safe-area-inset-bottom, 0px); --safe-t: env(safe-area-inset-top, 0px);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; background: var(--bg); color: var(--text); }
+body {
+  font: 16px/1.4 ui-rounded, "SF Pro Rounded", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  min-height: 100dvh; overscroll-behavior-y: none;
+  background: radial-gradient(120% 60% at 50% -10%, #2b1f6e 0%, var(--bg) 60%) fixed;
+}
+button, input, textarea, select { font: inherit; color: inherit; }
+button { cursor: pointer; border: 0; background: none; }
+a { color: inherit; }
+.hidden { display: none !important; }
+
+/* ---------- header / tabs ---------- */
+.top {
+  position: sticky; top: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between;
+  padding: calc(var(--safe-t) + 10px) 16px 10px; background: rgba(15, 11, 36, .78);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-bottom: 1px solid rgba(255,255,255,.05);
+}
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand img { width: 34px; height: 34px; border-radius: 10px; }
+.brand b { display: block; font-size: 17px; letter-spacing: -.01em; }
+.brand small { color: var(--muted); font-size: 12px; }
+.icon-btn { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--card); }
+.icon-btn svg { width: 20px; height: 20px; }
+main { padding: 14px 16px calc(96px + var(--safe-b)); max-width: 640px; margin: 0 auto; }
+.tabs {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; display: grid; grid-template-columns: repeat(4, 1fr);
+  padding: 8px 8px calc(8px + var(--safe-b)); background: rgba(19, 14, 46, .88);
+  backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); border-top: 1px solid rgba(255,255,255,.06);
+}
+.tab { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 0; color: var(--dim); font-size: 11px; font-weight: 600; position: relative; }
+.tab svg { width: 24px; height: 24px; }
+.tab.on { color: var(--accent); }
+.tab .badge { position: absolute; top: 2px; left: calc(50% + 6px); min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--pink); color: #fff; font-size: 11px; line-height: 18px; text-align: center; }
+svg.i { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---------- building blocks ---------- */
+h1.title { font-size: 28px; margin: 6px 2px 4px; letter-spacing: -.02em; }
+.lead { color: var(--muted); margin: 0 2px 16px; font-size: 15px; }
+.card { background: var(--card); border-radius: var(--r); padding: 16px; margin-bottom: 12px; border: 1px solid rgba(255,255,255,.04); }
+.lbl { display: block; font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 10px; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.hint { color: var(--muted); font-size: 13.5px; margin: 10px 2px 0; min-height: 1em; }
+textarea, input[type=text], input[type=password], select {
+  width: 100%; background: var(--bg2); border: 1.5px solid var(--line); border-radius: 14px; padding: 13px 14px; font-size: 16px; outline: none;
+}
+textarea { resize: none; line-height: 1.35; }
+textarea:focus, input:focus, select:focus { border-color: var(--violet); }
+select { appearance: none; -webkit-appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%); background-position: calc(100% - 20px) 55%, calc(100% - 14px) 55%; background-size: 6px 6px; background-repeat: no-repeat; padding-right: 36px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chips.scroll { flex-wrap: nowrap; overflow-x: auto; margin: 0 -16px; padding: 0 16px 2px; scrollbar-width: none; }
+.chips.scroll::-webkit-scrollbar { display: none; }
+.chip { flex: none; padding: 10px 14px; border-radius: 999px; background: var(--card2); border: 1.5px solid transparent; font-size: 15px; font-weight: 600; white-space: nowrap; transition: transform .12s; }
+.chip:active { transform: scale(.96); }
+.chip.on { background: rgba(255, 207, 63, .14); border-color: var(--accent); color: var(--accent); }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.opt { text-align: left; padding: 14px; border-radius: 16px; background: var(--card2); border: 1.5px solid transparent; }
+.opt b { display: block; font-size: 16px; margin-bottom: 3px; }
+.opt span { color: var(--muted); font-size: 13px; }
+.opt.on { border-color: var(--accent); background: rgba(255, 207, 63, .1); }
+.opt .def { display: inline-block; margin-left: 4px; font-size: 10.5px; font-weight: 700; padding: 1px 6px; border-radius: 6px; background: var(--line); color: var(--muted); vertical-align: 2px; }
+.btn {
+  display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 16px; border-radius: 18px;
+  background: var(--accent); color: var(--accent-ink); font-weight: 800; font-size: 17px; text-decoration: none;
+  box-shadow: 0 8px 30px rgba(255, 207, 63, .25); transition: transform .12s, opacity .2s;
+}
+.btn:active { transform: scale(.98); }
+.btn[disabled] { opacity: .5; }
+.btn.ghost { background: var(--card2); color: var(--text); box-shadow: none; }
+.btn.small { width: auto; padding: 10px 14px; font-size: 14.5px; border-radius: 14px; box-shadow: none; }
+.btn.danger { background: rgba(255, 107, 122, .14); color: var(--err); box-shadow: none; }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.switch { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-weight: 600; font-size: 14px; }
+.switch input { appearance: none; -webkit-appearance: none; width: 46px; height: 28px; border-radius: 14px; background: var(--line); position: relative; transition: background .2s; margin: 0; }
+.switch input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; transition: transform .2s; }
+.switch input:checked { background: var(--violet); }
+.switch input:checked::after { transform: translateX(18px); }
+input[type=range] { width: 100%; accent-color: var(--accent); height: 30px; margin: 6px 0 0; }
+input[type=range]:disabled { opacity: .35; }
+.big-val { font-size: 22px; font-weight: 800; color: var(--accent); }
+.big-val.off { color: var(--dim); font-size: 16px; }
+.empty { text-align: center; color: var(--muted); padding: 40px 20px; }
+.empty .e { font-size: 44px; margin-bottom: 8px; }
+.err-box { background: rgba(255, 107, 122, .12); color: #ffc4ca; border-radius: 14px; padding: 12px 14px; font-size: 14px; margin-bottom: 12px; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+.spin { width: 18px; height: 18px; border-radius: 50%; border: 2.5px solid rgba(255,255,255,.25); border-top-color: currentColor; animation: spin .8s linear infinite; display: inline-block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------- topics ---------- */
+.topic { display: flex; gap: 12px; align-items: flex-start; }
+.topic + .topic { border-top: 1px solid rgba(255,255,255,.06); padding-top: 14px; margin-top: 14px; }
+.topic .txt { flex: 1; min-width: 0; }
+.topic .txt b { font-weight: 650; display: block; margin-bottom: 6px; }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag { font-size: 12px; font-weight: 650; padding: 3px 8px; border-radius: 8px; background: var(--card2); color: var(--muted); }
+.state { flex: none; font-size: 13px; font-weight: 700; padding: 8px 12px; border-radius: 12px; }
+.state.go { background: var(--accent); color: var(--accent-ink); }
+.state.run { background: rgba(124, 108, 255, .18); color: #c3baff; }
+.state.ok { background: rgba(61, 220, 151, .14); color: var(--ok); }
+.state.ko { background: rgba(255, 107, 122, .14); color: var(--err); }
+.state.wait { background: var(--card2); color: var(--muted); }
+
+/* ---------- runs ---------- */
+.run-h { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+.run-h b { font-size: 16.5px; font-weight: 700; }
+.pill { flex: none; font-size: 12.5px; font-weight: 700; padding: 5px 10px; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; }
+.pill.run { background: rgba(124, 108, 255, .2); color: #c9c1ff; }
+.pill.ok { background: rgba(61, 220, 151, .14); color: var(--ok); }
+.pill.ko { background: rgba(255, 107, 122, .14); color: var(--err); }
+.pill.wait { background: var(--card2); color: var(--muted); }
+.pill .spin { width: 12px; height: 12px; border-width: 2px; }
+.bar { height: 8px; border-radius: 4px; background: var(--bg2); overflow: hidden; margin: 14px 0 10px; }
+.bar i { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--violet), var(--pink), var(--accent)); transition: width .6s; }
+.phases { display: flex; justify-content: space-between; gap: 2px; }
+.ph { flex: 1; text-align: center; font-size: 10.5px; color: var(--dim); font-weight: 650; }
+.ph .d { font-size: 18px; display: block; margin-bottom: 2px; filter: grayscale(1); opacity: .45; }
+.ph.done { color: var(--muted); }
+.ph.done .d { filter: none; opacity: .9; }
+.ph.cur { color: var(--accent); }
+.ph.cur .d { filter: none; opacity: 1; animation: bob 1.2s ease-in-out infinite; }
+@keyframes bob { 50% { transform: translateY(-3px); } }
+.meta { color: var(--muted); font-size: 13px; margin-top: 4px; }
+
+/* ---------- videos ---------- */
+.vid { display: flex; gap: 14px; align-items: center; }
+.thumb { flex: none; width: 54px; height: 96px; border-radius: 12px; display: grid; place-items: center; font-size: 26px; background: linear-gradient(160deg, #3b2c99, #1a1450 70%); }
+.vid .info { flex: 1; min-width: 0; }
+.vid .info b { display: block; font-size: 16.5px; margin-bottom: 4px; }
+.desc { background: var(--bg2); border-radius: 12px; padding: 10px 12px; font-size: 13.5px; color: var(--muted); white-space: pre-wrap; margin-top: 12px; }
+
+/* ---------- sheet / toast ---------- */
+.veil { position: fixed; inset: 0; z-index: 20; background: rgba(5, 3, 15, .6); display: flex; align-items: flex-end; justify-content: center; animation: fade .2s; }
+.sheet { width: 100%; max-width: 640px; background: var(--bg2); border-radius: 26px 26px 0 0; padding: 10px 16px calc(20px + var(--safe-b)); animation: up .25s cubic-bezier(.2, .9, .3, 1); max-height: 92dvh; overflow: auto; }
+.sheet .grab { width: 40px; height: 5px; border-radius: 3px; background: var(--line); margin: 0 auto 14px; }
+.sheet h2 { margin: 0 0 14px; font-size: 21px; }
+.sheet .field { margin-bottom: 14px; }
+@keyframes up { from { transform: translateY(100%); } }
+@keyframes fade { from { opacity: 0; } }
+#toast { position: fixed; left: 50%; bottom: calc(96px + var(--safe-b)); transform: translateX(-50%) translateY(20px); z-index: 30; background: #fff; color: #1a1340; font-weight: 700; padding: 12px 18px; border-radius: 16px; box-shadow: 0 10px 40px rgba(0,0,0,.4); opacity: 0; pointer-events: none; transition: .25s; width: max-content; max-width: calc(100% - 32px); text-align: center; font-size: 15px; }
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ---------- setup ---------- */
+.hero { text-align: center; padding: 20px 6px 8px; }
+.hero img { width: 92px; height: 92px; border-radius: 24px; box-shadow: 0 16px 50px rgba(124, 108, 255, .45); }
+.hero h1 { font-size: 30px; margin: 18px 0 6px; }
+.steps { counter-reset: s; margin: 0; padding: 0; list-style: none; }
+.steps li { counter-increment: s; position: relative; padding-left: 40px; margin-bottom: 14px; font-size: 15px; }
+.steps li::before { content: counter(s); position: absolute; left: 0; top: -2px; width: 28px; height: 28px; border-radius: 50%; background: var(--violet); color: #fff; font-weight: 800; display: grid; place-items: center; font-size: 14px; }
+.perm { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; background: var(--bg2); border-radius: 12px; padding: 10px 12px; margin-top: 8px; font-size: 13.5px; }
+.perm span:nth-child(even) { color: var(--accent); font-weight: 700; }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><img src="icons/icon-192.png" alt=""><div><b>Studio Sciences</b><small id="sub">Vidéos TikTok automatiques</small></div></div>
+  <button class="icon-btn" id="btn-settings" aria-label="Réglages"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+</header>
+
+<main>
+  <section id="v-setup" class="hidden"></section>
+  <section id="v-create" class="hidden"></section>
+  <section id="v-topics" class="hidden"></section>
+  <section id="v-runs" class="hidden"></section>
+  <section id="v-videos" class="hidden"></section>
+  <section id="v-settings" class="hidden"></section>
+</main>
+
+<nav class="tabs hidden" id="tabs">
+  <button class="tab" data-view="create"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.5L12 15l-1.8-4.5L5.5 9l4.7-1.4z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg>Créer</button>
+  <button class="tab" data-view="topics"><svg class="i" viewBox="0 0 24 24"><path d="M3 6l2 2 3-3M3 13l2 2 3-3M12 6h9M12 13h9M12 20h9M4 20h1"/></svg>Sujets</button>
+  <button class="tab" data-view="runs"><svg class="i" viewBox="0 0 24 24"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>Suivi<span class="badge hidden" id="runs-badge"></span></button>
+  <button class="tab" data-view="videos"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M10 8.5v7l6-3.5z"/></svg>Vidéos</button>
+</nav>
+<div id="toast"></div>
+
+<script src="vendor/js-yaml.min.js"></script>
+<script>
+'use strict';
+// Studio Sciences — interface mobile du pipeline. Tout passe par l'API GitHub avec la clé de l'utilisateur,
+// gardée uniquement dans ce navigateur. Les lancements utilisent les mêmes chemins que l'app GitHub :
+// « Run workflow » de generate.yml, ou une case cochée dans l'issue « sujets » du jour.
+
+const TON_EMOJI = { 'scientifique': '🔬', 'comique-scientifique': '😂', 'science-fiction': '🚀', 'absurde': '🤪', 'ironique-scientifique': '😏' };
+const CAT_EMOJI = { 'corps-humain': '🫀', 'animaux': '🐾', 'espace': '🪐', 'physique': '⚡', 'chimie': '🧪', 'terre-climat': '🌋', 'technologie': '🤖', 'histoire-sciences': '📜' };
+// étapes de generate.yml regroupées en phases lisibles (préfixes des noms d'étapes)
+const PHASES = [
+  { k: 'prep', e: '🧰', n: 'Prépa', steps: ['Set up job', 'Run actions/', 'Dépendances', 'Choix du sujet', 'Marquer « en cours »', 'Cache Playwright', 'Chromium'] },
+  { k: 'script', e: '✍️', n: 'Script', steps: ['Prompt du script', 'Script (Claude)', 'Vérification du script'] },
+  { k: 'voix', e: '🎙️', n: 'Voix', steps: ['Voix ElevenLabs'] },
+  { k: 'anim', e: '🎨', n: 'Animation', steps: ["Prompt de l'animation", 'Animation (Claude)', 'Contrôle (build', 'Prompt de correction', 'Correction', 'Contrôle après correction'] },
+  { k: 'review', e: '👀', n: 'Relecture', steps: ['Planche de relecture', 'Relecture visuelle', 'Contrôle après relecture'] },
+  { k: 'render', e: '🎬', n: 'Rendu', steps: ['Export'] },
+  { k: 'deliver', e: '📦', n: 'Livraison', steps: ['Release', 'Historique', 'Marquer « livrée »'] },
+];
+const LINE = /^(\s*[-*]\s*\[)([ xX])(\]\s*)(.+?)\s*$/;
+const MARKS = ['⏳', '✅', '❌'];
+
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const store = (k, v) => {
+  try {
+    if (v === undefined) return localStorage.getItem('studio.' + k);
+    if (v === null) localStorage.removeItem('studio.' + k); else localStorage.setItem('studio.' + k, v);
+  } catch (e) { return null; }
+};
+const storeJSON = (k, v) => { if (v === undefined) { try { return JSON.parse(store(k) || 'null'); } catch (e) { return null; } } store(k, JSON.stringify(v)); };
+
+const S = {
+  tok: store('tok'), repo: store('repo') || '', view: store('view') || 'create',
+  cfg: {}, tons: {}, cats: {}, tonOpts: [], catOpts: [],
+  form: { sujet: '', ton: 'défaut', categorie: 'défaut', mode: '', duree: '' },
+  issue: null, runs: [], runInfo: {}, names: storeJSON('names') || {}, pending: null, releases: [],
+  timer: null, loaded: {},
+};
+
+// ---------- GitHub API ----------
+async function api(path, { method = 'GET', body, raw } = {}) {
+  const headers = { Authorization: 'Bearer ' + S.tok, Accept: raw ? 'application/vnd.github.raw' : 'application/vnd.github+json' };
+  if (body) headers['Content-Type'] = 'application/json';
+  let r;
+  try { r = await fetch('https://api.github.com' + path, { method, headers, cache: 'no-store', body: body ? JSON.stringify(body) : undefined }); }
+  catch (e) { throw new Error('Pas de connexion à GitHub. Vérifie ton réseau.'); }
+  if (!r.ok) {
+    let m = ''; try { m = (await r.json()).message || ''; } catch (e) {}
+    const err = new Error(friendly(r.status, m)); err.status = r.status; throw err;
+  }
+  if (r.status === 204) return null;
+  return raw ? r.text() : r.json();
+}
+function friendly(status, m) {
+  if (status === 401) return 'Clé GitHub refusée (expirée ou mal copiée). Recolle-la dans les réglages.';
+  if (status === 403 || status === 404) return `Accès refusé par GitHub (${m || status}). Vérifie que la clé donne accès au dépôt avec les bonnes permissions.`;
+  if (status === 422) return 'GitHub a refusé la demande : ' + m;
+  return `Erreur GitHub ${status}${m ? ' : ' + m : ''}`;
+}
+const RP = p => '/repos/' + S.repo + p;
+const b64dec = s => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/\s/g, '')), c => c.charCodeAt(0)));
+const b64enc = s => { const b = new TextEncoder().encode(s); let o = ''; for (const x of b) o += String.fromCharCode(x); return btoa(o); };
+
+// ---------- config (tons, catégories, réglages) ----------
+async function loadConfig() {
+  const files = ['config/settings.yml', 'config/tons.yml', 'config/categories.yml', '.github/workflows/generate.yml'];
+  const [set, tons, cats, wf] = await Promise.all(files.map(p => api(RP('/contents/' + p + '?ref=main'), { raw: true })));
+  const w = jsyaml.load(wf) || {};
+  const inputs = ((w.on || w[true] || {}).workflow_dispatch || {}).inputs || {};
+  const c = { cfg: jsyaml.load(set) || {}, tons: jsyaml.load(tons) || {}, cats: jsyaml.load(cats) || {},
+    tonOpts: (inputs.ton?.options || []).filter(x => x !== 'défaut'), catOpts: (inputs.categorie?.options || []).filter(x => x !== 'défaut') };
+  applyConfig(c); storeJSON('config', c);
+}
+function applyConfig(c) {
+  if (!c) return;
+  Object.assign(S, c);
+  // « Run workflow » n'accepte que les choix listés dans generate.yml
+  if (!S.tonOpts.length) S.tonOpts = Object.keys(S.tons);
+  if (!S.catOpts.length) S.catOpts = Object.keys(S.cats);
+  if (!S.form.mode) S.form.mode = S.cfg.mode || 'rapide';
+}
+const tonName = k => S.tons[k]?.nom || k || '';
+const catName = k => S.cats[k]?.nom || k || '';
+const tonLabel = k => `${TON_EMOJI[k] || '🎭'} ${tonName(k)}`;
+const catLabel = k => `${CAT_EMOJI[k] || '📚'} ${catName(k)}`;
+function resolveKey(v, table) {
+  const s = slug(v); if (!s) return '';
+  return Object.keys(table).find(k => k === s || slug(table[k]?.nom) === s) || v;
+}
+const slug = v => String(v || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+// ---------- navigation ----------
+function go(view) {
+  if (!S.tok) view = 'setup';
+  S.view = view; if (view !== 'setup') store('view', view);
+  for (const s of document.querySelectorAll('main > section')) s.classList.toggle('hidden', s.id !== 'v-' + view);
+  for (const t of document.querySelectorAll('.tab')) t.classList.toggle('on', t.dataset.view === view);
+  $('#tabs').classList.toggle('hidden', view === 'setup');
+  $('#btn-settings').classList.toggle('hidden', view === 'setup');
+  window.scrollTo(0, 0);
+  render(view, true);
+}
+function render(view, fresh) {
+  const f = { setup: renderSetup, create: renderCreate, topics: loadTopics, runs: refreshRuns, videos: loadVideos, settings: renderSettings }[view];
+  if (f) f(fresh);
+  schedule();
+}
+function schedule() {
+  clearTimeout(S.timer);
+  const active = S.runs.some(r => r.status !== 'completed');
+  const ms = S.view === 'runs' ? (active ? 8000 : 30000) : (active ? 20000 : 60000);
+  S.timer = setTimeout(async () => {
+    if (document.visibilityState !== 'visible' || !S.tok) return schedule();
+    if (S.view === 'runs') await refreshRuns(); else await refreshRuns(false, true);
+    if (S.view === 'topics' && active) await loadTopics();
+    schedule();
+  }, ms);
+}
+function toast(msg, ms = 2600) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), ms);
+}
+function loading(el, text = 'Chargement…') { el.innerHTML = `<div class="empty"><span class="spin"></span><p>${esc(text)}</p></div>`; }
+function errorBox(e) {
+  if (e.status === 401) { setTimeout(() => go('settings'), 1500); }
+  return `<div class="err-box">${esc(e.message)}</div>`;
+}
+const ago = iso => {
+  const s = (Date.now() - new Date(iso)) / 1000;
+  if (s < 60) return "à l'instant"; if (s < 3600) return `il y a ${Math.round(s / 60)} min`;
+  if (s < 86400) return `il y a ${Math.round(s / 3600)} h`;
+  return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+};
+const mins = (a, b) => Math.max(0, Math.round(((b ? new Date(b) : Date.now()) - new Date(a)) / 60000));
+
+// ---------- 1. connexion ----------
+// le dépôt n'est écrit nulle part dans la page : c'est celui (parmi ceux que la clé voit) qui contient generate.yml
+async function findRepo() {
+  const repos = await api('/user/repos?per_page=100&sort=updated');
+  for (const r of repos) {
+    try { await api(`/repos/${r.full_name}/actions/workflows/generate.yml`); return r.full_name; } catch (e) {}
+  }
+  throw new Error('Cette clé ne voit aucun dépôt avec le pipeline vidéo. Dans « Repository access », choisis ton dépôt de vidéos.');
+}
+function tokenLink() {
+  const p = new URLSearchParams({ name: 'Studio Sciences (téléphone)', description: "Interface mobile du pipeline TikTok",
+    expires_in: '366', actions: 'write', issues: 'write', contents: 'write' });
+  return 'https://github.com/settings/personal-access-tokens/new?' + p;
+}
+function renderSetup() {
+  $('#v-setup').innerHTML = `
+    <div class="hero"><img src="icons/icon-192.png" alt=""><h1>Studio Sciences</h1>
+      <p class="lead">Lance tes vidéos, suis leur fabrication et récupère-les, sans ouvrir GitHub.</p></div>
+    <div class="card">
+      <span class="lbl">Connexion (une seule fois)</span>
+      <ol class="steps">
+        <li>Crée une clé GitHub pour cette app :<div class="btns"><a class="btn small" href="${esc(tokenLink())}" target="_blank" rel="noopener">Créer la clé sur GitHub ↗</a></div></li>
+        <li>Dans <b>Repository access</b>, choisis <b>Only select repositories</b> → ton dépôt de vidéos. Vérifie les permissions :
+          <div class="perm"><span>Actions</span><span>Read and write</span><span>Contents</span><span>Read and write</span><span>Issues</span><span>Read and write</span></div></li>
+        <li>Touche <b>Generate token</b>, copie la clé (elle commence par <code>github_pat_</code>) et colle-la ici :</li>
+      </ol>
+      <input type="password" id="tok" placeholder="github_pat_…" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <div id="setup-err" class="hint"></div>
+      <div style="margin-top:12px"><button class="btn" id="tok-go">Se connecter</button></div>
+      <p class="hint small">La clé reste uniquement sur ce téléphone, dans ce navigateur.</p>
+    </div>`;
+  $('#tok-go').onclick = async () => {
+    const v = $('#tok').value.trim(); if (!v) return;
+    const b = $('#tok-go'); b.disabled = true; b.innerHTML = '<span class="spin"></span> Vérification…';
+    S.tok = v;
+    try {
+      S.repo = await findRepo();
+      store('tok', v); store('repo', S.repo); await loadConfig();
+      toast('Connecté ✅'); go('create');
+    } catch (e) {
+      S.tok = null; b.disabled = false; b.textContent = 'Se connecter';
+      $('#setup-err').innerHTML = errorBox(e);
+    }
+  };
+}
+
+// ---------- 2. créer ----------
+function renderCreate() {
+  const f = S.form, c = S.cfg, el = $('#v-create');
+  if (!S.tonOpts.length) { loading(el, 'Chargement des tons…'); loadConfig().then(() => S.view === 'create' && renderCreate()).catch(e => el.innerHTML = errorBox(e)); return; }
+  const chip = (field, v, label) => `<button class="chip ${f[field] === v ? 'on' : ''}" data-f="${field}" data-v="${esc(v)}">${esc(label)}</button>`;
+  const autoDur = !f.duree;
+  el.innerHTML = `
+    <h1 class="title">Nouvelle vidéo</h1>
+    <p class="lead">Choisis un sujet, Claude écrit, ElevenLabs parle, l'animation suit.</p>
+    <div class="card">
+      <span class="lbl">Sujet</span>
+      <textarea id="f-sujet" rows="3" maxlength="300" placeholder="Ex. Pourquoi les chats retombent toujours sur leurs pattes ?">${esc(f.sujet)}</textarea>
+      <p class="hint">Pas d'idée ? <a href="#" data-goto="topics">Vois les sujets du jour →</a></p>
+    </div>
+    <div class="card">
+      <span class="lbl">Ton</span>
+      <div class="chips scroll">${chip('ton', 'défaut', '⭐ Par défaut')}${S.tonOpts.map(k => chip('ton', k, tonLabel(k))).join('')}</div>
+      <p class="hint" id="ton-hint"></p>
+    </div>
+    <div class="card">
+      <span class="lbl">Catégorie</span>
+      <div class="chips">${chip('categorie', 'défaut', '⭐ Par défaut')}${S.catOpts.map(k => chip('categorie', k, catLabel(k))).join('')}</div>
+      <p class="hint" id="cat-hint"></p>
+    </div>
+    <div class="card">
+      <div class="row"><span class="lbl" style="margin:0">Durée</span>
+        <label class="switch">Auto <input type="checkbox" id="f-auto" ${autoDur ? 'checked' : ''}></label></div>
+      <div style="margin-top:12px" class="row"><span class="big-val ${autoDur ? 'off' : ''}" id="dur-val"></span></div>
+      <input type="range" id="f-duree" min="29" max="59" step="1" value="${esc(f.duree || 45)}" ${autoDur ? 'disabled' : ''}>
+    </div>
+    <div class="card">
+      <span class="lbl">Qualité</span>
+      <div class="grid2">
+        <button class="opt ${f.mode === 'rapide' ? 'on' : ''}" data-mode="rapide"><b>⚡ Rapide${c.mode === 'rapide' ? '<span class="def">DÉFAUT</span>' : ''}</b><span>Scènes de la bibliothèque, plus vite prête</span></button>
+        <button class="opt ${f.mode === 'premium' ? 'on' : ''}" data-mode="premium"><b>💎 Premium${c.mode === 'premium' ? '<span class="def">DÉFAUT</span>' : ''}</b><span>Animation sur mesure, prend plus de temps</span></button>
+      </div>
+    </div>
+    <button class="btn" id="launch">🎬 Lancer la vidéo</button>
+    <p class="hint small" style="text-align:center">Compte entre 10 et 35 minutes. Tu peux fermer l'app pendant ce temps.</p>`;
+  const hints = () => {
+    const t = f.ton === 'défaut' ? c.ton : f.ton, k = f.categorie === 'défaut' ? c.categorie : f.categorie;
+    const v = String(S.tons[t]?.voix || '').trim().split(/(?<=\.)\s/)[0];
+    $('#ton-hint').textContent = (f.ton === 'défaut' ? `Par défaut : ${tonName(t)}. ` : '') + v;
+    const ideas = S.cats[k]?.idees || [];
+    $('#cat-hint').textContent = (f.categorie === 'défaut' ? `Par défaut : ${catName(k)}. ` : '') + (ideas.length ? 'Idées : ' + ideas.join(', ') + '.' : '');
+    const auto = $('#f-auto').checked;
+    $('#dur-val').textContent = auto ? (c.duree ? `Réglage par défaut : ${c.duree} s` : 'Automatique (29 à 59 s selon le sujet)') : `${$('#f-duree').value} s`;
+    $('#dur-val').classList.toggle('off', auto);
+  };
+  hints();
+  $('#f-sujet').oninput = e => { f.sujet = e.target.value; };
+  el.querySelectorAll('.chip').forEach(b => b.onclick = () => {
+    f[b.dataset.f] = b.dataset.v;
+    el.querySelectorAll(`.chip[data-f="${b.dataset.f}"]`).forEach(x => x.classList.toggle('on', x === b));
+    hints();
+  });
+  el.querySelectorAll('.opt').forEach(b => b.onclick = () => { f.mode = b.dataset.mode; el.querySelectorAll('.opt').forEach(x => x.classList.toggle('on', x === b)); });
+  $('#f-auto').onchange = e => { $('#f-duree').disabled = e.target.checked; f.duree = e.target.checked ? '' : $('#f-duree').value; hints(); };
+  $('#f-duree').oninput = e => { f.duree = e.target.value; hints(); };
+  $('#launch').onclick = launch;
+}
+async function launch() {
+  const f = S.form, sujet = f.sujet.trim();
+  if (!sujet) { toast('Écris d’abord un sujet 🙂'); $('#f-sujet').focus(); return; }
+  const b = $('#launch'); b.disabled = true; b.innerHTML = '<span class="spin"></span> Envoi…';
+  try {
+    await api(RP('/actions/workflows/generate.yml/dispatches'), { method: 'POST', body: { ref: 'main',
+      inputs: { sujet, ton: f.ton, categorie: f.categorie, mode: f.mode || 'défaut', duree: f.duree ? String(f.duree) : '' } } });
+    S.pending = { name: sujet, t: Date.now() };
+    f.sujet = '';
+    toast('🎬 C’est parti ! Suis la fabrication ici.');
+    go('runs');
+  } catch (e) {
+    b.disabled = false; b.textContent = '🎬 Lancer la vidéo';
+    $('#launch').insertAdjacentHTML('beforebegin', errorBox(e));
+  }
+}
+
+// ---------- 3. sujets du jour ----------
+function parseLine(text) {
+  let mark = MARKS.find(m => text.endsWith(m)) || null;
+  if (mark) text = text.slice(0, -mark.length).trimEnd();
+  const p = text.split(/\s+[—–]\s+/).map(x => x.trim());
+  return { sujet: p[0], ton: p[1] || '', cat: p[2] || '', mark };
+}
+function topicLines(body) {
+  return (body || '').split(/\r?\n/).map((l, i) => { const m = l.match(LINE); return m && { i, checked: /x/i.test(m[2]), raw: m[4], ...parseLine(m[4]) }; }).filter(Boolean);
+}
+async function loadTopics(fresh) {
+  const el = $('#v-topics');
+  if (fresh && !S.issue) loading(el, 'Chargement des sujets…');
+  try {
+    const list = await api(RP('/issues?labels=sujets&state=open&per_page=5&sort=created&direction=desc'));
+    S.issue = list[0] || null; renderTopics();
+  } catch (e) { el.innerHTML = errorBox(e); }
+}
+function renderTopics() {
+  const el = $('#v-topics'), iss = S.issue;
+  const head = `<h1 class="title">Sujets du jour</h1><p class="lead">Claude en propose chaque matin à 7 h. Touche un sujet pour le lancer, tu peux le modifier avant.</p>`;
+  const more = `<button class="btn ghost" id="propose">✨ Proposer de nouveaux sujets</button>`;
+  if (!iss) { el.innerHTML = head + `<div class="card empty"><div class="e">🗓️</div>Pas encore de sujets aujourd'hui.</div>` + more; bindPropose(); return; }
+  const lines = topicLines(iss.body);
+  const st = l => l.mark === '✅' ? ['ok', '✅ Livrée'] : l.mark === '⏳' ? ['run', '⏳ En cours'] : l.mark === '❌' ? ['ko', '↻ Réessayer'] : l.checked ? ['wait', 'En file'] : ['go', 'Lancer'];
+  el.innerHTML = head + `<div class="card"><span class="lbl">${esc(iss.title)}</span>${lines.map((l, n) => {
+    const [cls, txt] = st(l); const t = resolveKey(l.ton, S.tons), k = resolveKey(l.cat, S.cats);
+    return `<div class="topic"><div class="txt"><b>${esc(l.sujet)}</b><div class="tags">${t ? `<span class="tag">${esc(tonLabel(t))}</span>` : ''}${k ? `<span class="tag">${esc(catLabel(k))}</span>` : ''}</div></div>
+      <button class="state ${cls}" data-n="${n}" ${cls === 'go' || cls === 'ko' ? '' : 'disabled'}>${txt}</button></div>`;
+  }).join('') || '<p class="muted">Aucune ligne de sujet dans cette issue.</p>'}</div>` + more;
+  el.querySelectorAll('.state[data-n]:not([disabled])').forEach(b => b.onclick = () => topicSheet(lines[+b.dataset.n]));
+  bindPropose();
+}
+function bindPropose() {
+  $('#propose').onclick = async () => {
+    const b = $('#propose'); b.disabled = true; b.innerHTML = '<span class="spin"></span> Claude réfléchit…';
+    try {
+      await api(RP('/actions/workflows/propose.yml/dispatches'), { method: 'POST', body: { ref: 'main' } });
+      toast('✨ Nouveaux sujets dans 1 à 2 minutes', 3500);
+      setTimeout(() => S.view === 'topics' && loadTopics(), 70000);
+      setTimeout(() => S.view === 'topics' && loadTopics(), 130000);
+    } catch (e) { b.insertAdjacentHTML('beforebegin', errorBox(e)); }
+    setTimeout(() => { if ($('#propose')) { $('#propose').disabled = false; $('#propose').textContent = '✨ Proposer de nouveaux sujets'; } }, 4000);
+  };
+}
+function sheet(html) {
+  const v = document.createElement('div'); v.className = 'veil';
+  v.innerHTML = `<div class="sheet"><div class="grab"></div>${html}</div>`;
+  v.onclick = e => { if (e.target === v) v.remove(); };
+  document.body.appendChild(v); return v;
+}
+function topicSheet(line) {
+  const t = resolveKey(line.ton, S.tons) || S.cfg.ton, k = resolveKey(line.cat, S.cats) || S.cfg.categorie;
+  const opts = (list, cur, lab) => list.map(x => `<option value="${esc(x)}" ${x === cur ? 'selected' : ''}>${esc(lab(x))}</option>`).join('');
+  const v = sheet(`<h2>Lancer ce sujet</h2>
+    <div class="field"><span class="lbl">Sujet</span><textarea id="s-sujet" rows="3">${esc(line.sujet)}</textarea></div>
+    <div class="field"><span class="lbl">Ton</span><select id="s-ton">${opts(Object.keys(S.tons), t, tonLabel)}</select></div>
+    <div class="field"><span class="lbl">Catégorie</span><select id="s-cat">${opts(Object.keys(S.cats), k, catLabel)}</select></div>
+    <p class="hint small" style="margin-bottom:14px">Durée et qualité : réglages par défaut (${esc(S.cfg.mode || 'rapide')}).</p>
+    <button class="btn" id="s-go">🎬 Lancer la vidéo</button>
+    <div style="height:8px"></div><button class="btn ghost" id="s-cancel">Annuler</button>`);
+  $('#s-cancel', v).onclick = () => v.remove();
+  $('#s-go', v).onclick = async () => {
+    const sujet = $('#s-sujet', v).value.replace(/\s+/g, ' ').replace(/ [—–] /g, ' - ').trim(); if (!sujet) return;
+    const b = $('#s-go', v); b.disabled = true; b.innerHTML = '<span class="spin"></span> Envoi…';
+    try {
+      // relit l'issue juste avant : le pipeline y écrit ⏳ / ✅ pendant les rendus
+      const iss = await api(RP('/issues/' + S.issue.number));
+      const rows = (iss.body || '').split(/\r?\n/);
+      const j = rows.findIndex(r => { const m = r.match(LINE); if (!m) return false; const p = parseLine(m[4]); return p.sujet === line.sujet && p.ton === line.ton && p.cat === line.cat; });
+      if (j < 0) throw new Error('Cette ligne a changé entre-temps. Recharge les sujets.');
+      const m = rows[j].match(LINE);
+      rows[j] = `${m[1]}x${m[3]}${sujet} — ${$('#s-ton', v).value} — ${$('#s-cat', v).value}`;
+      await api(RP('/issues/' + S.issue.number), { method: 'PATCH', body: { body: rows.join('\n') } });
+      S.pending = { name: sujet, t: Date.now() };
+      v.remove(); toast('🎬 C’est parti !'); go('runs');
+    } catch (e) { b.disabled = false; b.textContent = '🎬 Lancer la vidéo'; b.insertAdjacentHTML('beforebegin', errorBox(e)); }
+  };
+}
+
+// ---------- 4. suivi ----------
+function phaseOf(name) { return PHASES.findIndex(p => p.steps.some(s => name.startsWith(s))); }
+function analyse(run, steps) {
+  const by = n => steps.find(s => s.name.startsWith(n));
+  const marked = by('Marquer « en cours »');
+  const info = { noop: run.status === 'completed' && (!marked || marked.conclusion === 'skipped'),
+    voice: by('Voix ElevenLabs')?.conclusion === 'success', phase: -1, step: '' };
+  const cur = steps.find(s => s.status === 'in_progress');
+  if (cur) { info.phase = phaseOf(cur.name); info.step = cur.name; }
+  else { const done = steps.filter(s => s.conclusion === 'success' && phaseOf(s.name) >= 0); info.phase = done.length ? phaseOf(done[done.length - 1].name) : 0; }
+  const failed = steps.find(s => s.conclusion === 'failure' && !/^(Message d'erreur|En cas d'échec|Sujet coché suivant|Fichiers de travail)/.test(s.name));
+  if (failed) { info.failedStep = failed.name; info.phase = Math.max(0, phaseOf(failed.name)); }
+  return info;
+}
+async function refreshRuns(fresh, quiet) {
+  const el = $('#v-runs');
+  if (fresh && !S.runs.length && !quiet) loading(el, 'Chargement du suivi…');
+  try {
+    const d = await api(RP('/actions/workflows/generate.yml/runs?per_page=15'));
+    const runs = d.workflow_runs.filter(r => r.conclusion !== 'skipped');
+    const cache = storeJSON('runinfo') || {};
+    await Promise.all(runs.map(async r => {
+      if (r.status === 'completed' && cache[r.id]) { S.runInfo[r.id] = cache[r.id]; return; }
+      const j = await api(RP(`/actions/runs/${r.id}/jobs`));
+      const info = analyse(r, (j.jobs[0] || {}).steps || []);
+      S.runInfo[r.id] = info; if (r.status === 'completed') cache[r.id] = info;
+    }));
+    storeJSON('runinfo', Object.fromEntries(Object.entries(cache).slice(-60)));
+    if (S.pending) {
+      const r = runs.find(r => !S.names[r.id] && new Date(r.created_at) >= S.pending.t - 15000);
+      if (r) { S.names[r.id] = S.pending.name; S.pending = null; storeJSON('names', Object.fromEntries(Object.entries(S.names).slice(-80))); }
+    }
+    S.runs = runs.filter(r => !S.runInfo[r.id]?.noop);
+    const active = S.runs.filter(r => r.status !== 'completed').length;
+    $('#runs-badge').textContent = active; $('#runs-badge').classList.toggle('hidden', !active);
+    if (S.view === 'runs') renderRuns();
+  } catch (e) { if (!quiet) el.innerHTML = errorBox(e); }
+}
+function runTitle(r) {
+  const t = S.names[r.id] || r.display_title || '';
+  return !t || t === 'Générer une vidéo' ? 'Vidéo' : t;
+}
+function renderRuns() {
+  const el = $('#v-runs');
+  let html = `<h1 class="title">Suivi</h1><p class="lead">La fabrication de tes vidéos, étape par étape.</p>`;
+  if (S.pending && Date.now() - S.pending.t < 90000) html += `<div class="card"><div class="run-h"><b>${esc(S.pending.name)}</b><span class="pill wait"><span class="spin"></span> Démarrage</span></div><p class="meta">GitHub prépare la machine…</p></div>`;
+  if (!S.runs.length && !S.pending) html += `<div class="card empty"><div class="e">🛋️</div>Rien en cours. Lance une vidéo depuis l'onglet Créer.</div>`;
+  html += S.runs.map(r => {
+    const i = S.runInfo[r.id] || {}, live = r.status !== 'completed';
+    const ok = r.conclusion === 'success', ko = !live && !ok;
+    const pill = live ? (r.status === 'queued' || r.status === 'waiting' || r.status === 'pending' ? `<span class="pill wait">En attente</span>` : `<span class="pill run"><span class="spin"></span>${mins(r.run_started_at || r.created_at)} min</span>`)
+      : ok ? `<span class="pill ok">✅ Livrée</span>` : r.conclusion === 'cancelled' ? `<span class="pill wait">Annulée</span>` : `<span class="pill ko">❌ Échec</span>`;
+    const pct = ok ? 100 : Math.round(((Math.max(0, i.phase) + (live ? .5 : 1)) / PHASES.length) * 100);
+    const steps = live || ko ? `<div class="bar"><i style="width:${pct}%"></i></div><div class="phases">${PHASES.map((p, n) =>
+      `<div class="ph ${n < i.phase || ok ? 'done' : n === i.phase ? (live ? 'cur' : 'done') : ''}"><span class="d">${n === i.phase && ko ? '⚠️' : p.e}</span>${p.n}</div>`).join('')}</div>` : '';
+    const meta = live ? (i.step ? `En ce moment : ${esc(i.step)}` : 'Démarrage…')
+      : `${ago(r.created_at)} · ${mins(r.run_started_at || r.created_at, r.updated_at)} min` + (ko && i.failedStep ? ` · bloqué à « ${esc(i.failedStep)} »` : '');
+    const btns = [
+      live ? `<button class="btn small danger" data-cancel="${r.id}">Annuler</button>` : '',
+      ok ? `<button class="btn small" data-goto="videos">🎬 Voir la vidéo</button>` : '',
+      ko && i.voice ? `<button class="btn small" data-resume="${r.id}">↻ Reprendre (voix gardée)</button>` : '',
+      `<a class="btn small ghost" href="${esc(r.html_url)}" target="_blank" rel="noopener">Journal ↗</a>`,
+    ].join('');
+    return `<div class="card"><div class="run-h"><b>${esc(runTitle(r))}</b>${pill}</div><p class="meta">${meta}</p>${steps}<div class="btns">${btns}</div></div>`;
+  }).join('');
+  el.innerHTML = html;
+  el.querySelectorAll('[data-cancel]').forEach(b => b.onclick = async () => {
+    if (!confirm('Arrêter cette vidéo ?')) return;
+    try { await api(RP(`/actions/runs/${b.dataset.cancel}/cancel`), { method: 'POST' }); toast('Arrêt demandé'); setTimeout(refreshRuns, 3000); }
+    catch (e) { toast(e.message, 4000); }
+  });
+  el.querySelectorAll('[data-resume]').forEach(b => b.onclick = async () => {
+    const r = S.runs.find(x => String(x.id) === b.dataset.resume);
+    try {
+      await api(RP('/actions/workflows/generate.yml/dispatches'), { method: 'POST', body: { ref: 'main', inputs: { reprendre: b.dataset.resume } } });
+      S.pending = { name: '↻ ' + runTitle(r), t: Date.now() }; toast('↻ Reprise lancée, sans repayer la voix'); refreshRuns();
+    } catch (e) { toast(e.message, 4000); }
+  });
+}
+
+// ---------- 5. vidéos ----------
+async function loadVideos(fresh) {
+  const el = $('#v-videos');
+  if (fresh && !S.releases.length) loading(el, 'Chargement des vidéos…');
+  try { S.releases = await api(RP('/releases?per_page=30')); renderVideos(); }
+  catch (e) { el.innerHTML = errorBox(e); }
+}
+function descOf(rel) { const m = (rel.body || '').match(/Description[^\n]*\n+```[^\n]*\n([\s\S]*?)```/); return m ? m[1].trim() : ''; }
+function renderVideos() {
+  const el = $('#v-videos');
+  let html = `<h1 class="title">Mes vidéos</h1><p class="lead">Télécharge, copie la description, publie sur TikTok.</p>`;
+  if (!S.releases.length) html += `<div class="card empty"><div class="e">🎞️</div>Aucune vidéo pour l'instant.</div>`;
+  html += S.releases.map((r, n) => {
+    const mp4 = (r.assets || []).find(a => a.name.endsWith('.mp4'));
+    const meta = ((r.body || '').match(/Ton : ([^·\n]+)· catégorie : ([^·\n]+)· mode : (\S+)/) || []);
+    const t = meta[1]?.trim(), k = meta[2]?.trim();
+    const d = descOf(r);
+    return `<div class="card"><div class="vid"><div class="thumb">${CAT_EMOJI[k] || '🎬'}</div><div class="info">
+      <b>${esc((r.name || r.tag_name).replace(/\s*\(\d{4}-\d{2}-\d{2}\)\s*$/, ''))}</b>
+      <div class="tags">${t ? `<span class="tag">${esc(tonLabel(t))}</span>` : ''}${meta[3] ? `<span class="tag">${meta[3] === 'premium' ? '💎' : '⚡'} ${esc(meta[3])}</span>` : ''}</div>
+      <p class="meta">${ago(r.created_at)}${mp4 ? ` · ${(mp4.size / 1048576).toFixed(0)} Mo` : ''}</p></div></div>
+      ${d ? `<div class="desc">${esc(d)}</div>` : ''}
+      <div class="btns">${mp4 ? `<a class="btn small" href="${esc(mp4.browser_download_url)}" target="_blank" rel="noopener">⬇️ Télécharger</a>` : ''}
+        ${d ? `<button class="btn small ghost" data-copy="${n}">📋 Copier la description</button>` : ''}
+        <a class="btn small ghost" href="${esc(r.html_url)}" target="_blank" rel="noopener">Détails ↗</a></div></div>`;
+  }).join('');
+  if (S.releases.length) html += `<p class="hint small" style="text-align:center">Le téléchargement s'ouvre dans ton navigateur : connecte-toi une fois à GitHub dans Safari ou Chrome (dépôt privé).</p>`;
+  el.innerHTML = html;
+  el.querySelectorAll('[data-copy]').forEach(b => b.onclick = async () => {
+    const d = descOf(S.releases[+b.dataset.copy]);
+    try { await navigator.clipboard.writeText(d); toast('📋 Description copiée'); }
+    catch (e) { const ta = document.createElement('textarea'); ta.value = d; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); toast('📋 Description copiée'); }
+  });
+}
+
+// ---------- 6. réglages ----------
+async function renderSettings() {
+  const el = $('#v-settings'), c = S.cfg;
+  const opts = (list, cur, lab) => list.map(x => `<option value="${esc(x)}" ${x === cur ? 'selected' : ''}>${esc(lab(x))}</option>`).join('');
+  const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  el.innerHTML = `<h1 class="title">Réglages</h1><p class="lead">Les choix utilisés quand tu laisses « Par défaut », et pour les sujets du jour.</p>
+    <div class="card">
+      <div class="field"><span class="lbl">Ton par défaut</span><select id="d-ton">${opts(Object.keys(S.tons), c.ton, tonLabel)}</select></div>
+      <div class="field" style="margin-top:12px"><span class="lbl">Catégorie par défaut</span><select id="d-cat">${opts(Object.keys(S.cats), c.categorie, catLabel)}</select></div>
+      <div class="field" style="margin-top:12px"><span class="lbl">Qualité par défaut</span><select id="d-mode">${opts(['rapide', 'premium'], c.mode, x => x === 'rapide' ? '⚡ Rapide' : '💎 Premium')}</select></div>
+      <div class="field" style="margin-top:12px"><span class="lbl">Durée par défaut</span><select id="d-dur"><option value="">Automatique (29 à 59 s)</option>${Array.from({ length: 31 }, (_, n) => n + 29).map(s => `<option value="${s}" ${String(c.duree) === String(s) ? 'selected' : ''}>${s} secondes</option>`).join('')}</select></div>
+      <div style="margin-top:16px"><button class="btn" id="d-save">Enregistrer</button></div>
+    </div>
+    ${standalone ? '' : `<div class="card"><span class="lbl">Installer l'app</span>
+      <p style="margin:0">📱 <b>iPhone</b> (Safari) : bouton Partager → <b>Sur l'écran d'accueil</b>.<br>🤖 <b>Android</b> (Chrome) : menu ⋮ → <b>Installer l'application</b>.</p></div>`}
+    <div class="card"><span class="lbl">Compte</span>
+      <p style="margin:0 0 4px">Dépôt : <b>${esc(S.repo)}</b></p><p class="muted small" style="margin:0">Clé GitHub enregistrée sur cet appareil.</p>
+      <div class="btns"><a class="btn small ghost" href="https://github.com/${esc(S.repo)}" target="_blank" rel="noopener">Ouvrir sur GitHub ↗</a>
+      <button class="btn small danger" id="logout">Changer de clé</button></div></div>`;
+  $('#d-save').onclick = saveDefaults;
+  $('#logout').onclick = () => { if (!confirm('Oublier la clé GitHub sur cet appareil ?')) return; store('tok', null); S.tok = null; go('setup'); };
+}
+async function saveDefaults() {
+  const b = $('#d-save'); b.disabled = true; b.innerHTML = '<span class="spin"></span> Enregistrement…';
+  try {
+    const f = await api(RP('/contents/config/settings.yml?ref=main'));
+    let txt = b64dec(f.content);
+    const set = (key, val) => { txt = txt.replace(new RegExp(`^(${key}:[ \\t]*)([^#\\n]*?)([ \\t]*#.*)?$`, 'm'), (_, a, __, cmt) => a + val + (cmt || '')); };
+    const dur = $('#d-dur').value;
+    set('ton', $('#d-ton').value); set('categorie', $('#d-cat').value); set('mode', $('#d-mode').value); set('duree', dur ? dur : '""');
+    await api(RP('/contents/config/settings.yml'), { method: 'PUT', body: { message: 'Réglages par défaut (app Studio)', content: b64enc(txt), sha: f.sha, branch: 'main' } });
+    Object.assign(S.cfg, jsyaml.load(txt)); S.form.mode = S.cfg.mode;
+    const c = storeJSON('config'); if (c) { c.cfg = S.cfg; storeJSON('config', c); }
+    toast('✅ Réglages enregistrés');
+  } catch (e) { b.insertAdjacentHTML('beforebegin', errorBox(e)); }
+  b.disabled = false; b.textContent = 'Enregistrer';
+}
+
+// ---------- démarrage ----------
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => go(t.dataset.view));
+$('#btn-settings').onclick = () => go('settings');
+document.addEventListener('click', e => { const a = e.target.closest('[data-goto]'); if (a) { e.preventDefault(); go(a.dataset.goto); } });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && S.tok && S.view !== 'create' && S.view !== 'settings') render(S.view); });
+if (!S.repo) S.tok = null;  // clé sans dépôt trouvé : on refait la connexion
+applyConfig(storeJSON('config'));
+go(S.tok ? (S.view === 'setup' ? 'create' : S.view) : 'setup');
+if (S.tok) {
+  loadConfig().then(() => {
+    if (S.view === 'create' && !S.form.sujet) renderCreate();
+    else if (S.view === 'topics' && S.issue) renderTopics();
+    else if (S.view === 'videos' && S.releases.length) renderVideos();
+  }).catch(() => {});
+  if (S.view !== 'runs') refreshRuns(false, true);
+}
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
