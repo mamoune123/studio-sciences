@@ -761,7 +761,7 @@ function metaOf(rel) {
   for (const part of line.split(' · ')) { const i = part.indexOf(' : '); if (i > 0) m[part.slice(0, i).trim().toLowerCase()] = part.slice(i + 3).trim(); }
   return { ton: m.ton || '', cat: m['catégorie'] || '', mode: m.mode || '', style: m.style || FLAT, format: m.format && m.format !== 'auto' ? m.format : '',
     duree: parseFloat(String(m['durée'] || '').replace(',', '.')) || null,
-    titre: (rel.name || rel.tag_name).replace(/\s*\(\d{4}-\d{2}-\d{2}\)\s*$/, ''), date: rel.created_at };
+    titre: (rel.name || rel.tag_name).replace(/\s*\(\d{4}-\d{2}-\d{2}\)\s*$/, ''), date: rel.published_at || rel.created_at };  // created_at = date du commit
 }
 const SORTS = { recent: 'Plus récentes', ancien: 'Plus anciennes', long: 'Plus longues', court: 'Plus courtes', az: 'Titre (A → Z)' };
 function renderVideos() {
