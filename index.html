@@ -243,8 +243,8 @@ const storeJSON = (k, v) => { if (v === undefined) { try { return JSON.parse(sto
 const S = {
   tok: store('tok'), repo: store('repo') || '', view: store('view') || 'create',
   cfg: {}, tons: {}, cats: {}, tonOpts: [], catOpts: [],
-  form: { sujet: '', ton: 'défaut', categorie: 'défaut', mode: '', duree: '', style: '', catFree: '', catSave: false },
-  vf: storeJSON('vfilter') || { sort: 'recent', style: '', cat: '', ton: '', q: '' },
+  form: { sujet: '', ton: 'défaut', categorie: 'défaut', mode: '', duree: '', style: '', format: '', catFree: '', catSave: false },
+  vf: { sort: 'recent', style: '', cat: '', ton: '', format: '', q: '', ...(storeJSON('vfilter') || {}) },
   issue: null, runs: [], runInfo: {}, names: storeJSON('names') || {}, pending: null, releases: [],
   timer: null, loaded: {},
 };
@@ -305,12 +305,21 @@ async function loadStyles() {
   }));
   return out.filter(Boolean);
 }
+// Formats narratifs (bibliothèque narrative du Creative Lab, recopiée dans agents/narratif/) : table
+// « format | fichier | quand l'utiliser » de son INDEX.md, relue à chaque lancement.
+function parseFormats(md) {
+  return md.split('\n').filter(l => l.startsWith('|')).map(l => l.trim().replace(/^\||\|$/g, '').split('|').map(x => x.trim()))
+    .filter(c => c.length >= 3 && /^[a-z0-9][a-z0-9-]*$/.test(c[0]) && /\.md$/.test(c[1])).map(c => ({ k: c[0], fichier: c[1], quand: c[2] }));
+}
+async function loadFormats() {
+  try { return parseFormats(await api(RP('/contents/agents/narratif/INDEX.md?ref=main'), { raw: true })); } catch (e) { return []; }
+}
 async function loadConfig() {
   const files = ['config/settings.yml', 'config/tons.yml', 'config/categories.yml', '.github/workflows/generate.yml'];
-  const [[set, tons, cats, wf], styles] = await Promise.all([Promise.all(files.map(p => api(RP('/contents/' + p + '?ref=main'), { raw: true }))), loadStyles()]);
+  const [[set, tons, cats, wf], styles, formats] = await Promise.all([Promise.all(files.map(p => api(RP('/contents/' + p + '?ref=main'), { raw: true }))), loadStyles(), loadFormats()]);
   const w = jsyaml.load(wf) || {};
   const inputs = ((w.on || w[true] || {}).workflow_dispatch || {}).inputs || {};
-  const c = { cfg: jsyaml.load(set) || {}, tons: jsyaml.load(tons) || {}, cats: jsyaml.load(cats) || {}, styles,
+  const c = { cfg: jsyaml.load(set) || {}, tons: jsyaml.load(tons) || {}, cats: jsyaml.load(cats) || {}, styles, formats,
     tonOpts: (inputs.ton?.options || []).filter(x => x !== 'défaut') };
   applyConfig(c); storeJSON('config', c);
 }
@@ -321,6 +330,8 @@ function applyConfig(c) {
   if (!S.tonOpts.length) S.tonOpts = Object.keys(S.tons);
   if (!S.styles?.length) S.styles = [{ skill: FLAT, style: 'flat-vector', nom: 'Flat vector', moteur: 'canvas 2D', desc: '' }];
   if (!S.form.mode) S.form.mode = S.cfg.mode || 'rapide';
+  if (!S.formats) S.formats = [];
+  if (!S.form.format || (S.form.format !== 'auto' && !fmtOf(S.form.format))) S.form.format = fmtOf(S.cfg.format) ? S.cfg.format : 'auto';
   if (!styleOf(S.form.style) || locked(S.form.style)) S.form.style = styleOf(S.cfg.style) && !locked(S.cfg.style) ? S.cfg.style : FLAT;
 }
 const tonName = k => S.tons[k]?.nom || k || '';
@@ -333,6 +344,9 @@ const styleEmoji = k => /3d/i.test((styleOf(k)?.moteur || '') + ' ' + k) ? '🧊
 const tonLabel = k => `${TON_EMOJI[k] || '🎭'} ${tonName(k)}`;
 const catLabel = k => `${CAT_EMOJI[k] || (S.cats[k] ? '📚' : '🏷️')} ${catName(k)}`;
 const styleLabel = k => `${styleEmoji(k)} ${styleName(k)}`;
+const FMT_EMOJI = { 'mythe-demoli': '💥', 'chiffre-absurde': '🔢', 'mecanisme-cache': '⚙️', 'et-si': '🌀', 'storytime-twist': '📖', 'echelle': '🔭' };
+const fmtOf = k => (S.formats || []).find(f => f.k === k);
+const fmtLabel = k => !k || k === 'auto' ? '✨ Auto' : `${FMT_EMOJI[k] || '📐'} ${k.charAt(0).toUpperCase()}${k.slice(1).replace(/-/g, ' ')}`;
 // catégories proposées pour un style : celles qui le listent, plus celles sans liste (valables pour tous)
 function catsFor(st) {
   const l = Object.keys(S.cats).filter(k => { const s = S.cats[k]?.styles; return !Array.isArray(s) || !s.length || s.includes(st); });
@@ -461,6 +475,11 @@ function renderCreate() {
       <p class="hint">Pas d'idée ? <a href="#" data-goto="topics">Vois les sujets du jour →</a></p>
     </div>
     <div class="card">
+      <span class="lbl">Format narratif</span>
+      <div class="chips">${chip('format', 'auto', fmtLabel('auto'))}${S.formats.map(x => chip('format', x.k, fmtLabel(x.k))).join('')}</div>
+      <p class="hint" id="fmt-hint"></p>
+    </div>
+    <div class="card">
       <span class="lbl">Catégorie</span>
       <div class="chips">${defOk ? chip('categorie', 'défaut', '⭐ Par défaut') : ''}${cats.map(k => chip('categorie', k, catLabel(k))).join('')}${chip('categorie', 'autre', '✏️ Autre…')}</div>
       <div id="cat-free" class="${f.categorie === 'autre' ? '' : 'hidden'}" style="margin-top:12px">
@@ -491,6 +510,7 @@ function renderCreate() {
     <p class="hint small" style="text-align:center">Compte entre 10 et 35 minutes (plus en 3D). Tu peux fermer l'app pendant ce temps.</p>`;
   const hints = () => {
     const t = f.ton === 'défaut' ? c.ton : f.ton, k = f.categorie === 'défaut' ? c.categorie : f.categorie;
+    $('#fmt-hint').textContent = f.format === 'auto' ? 'Claude choisit le format qui sert le mieux ton sujet.' : (fmtOf(f.format)?.quand || '') + '.';
     const v = String(S.tons[t]?.voix || '').trim().split(/(?<=\.)\s/)[0];
     $('#ton-hint').textContent = (f.ton === 'défaut' ? `Par défaut : ${tonName(t)}. ` : '') + v;
     const ideas = S.cats[k]?.idees || [];
@@ -545,7 +565,7 @@ async function launch() {
       try { await saveCategory(categorie, f.style); } catch (e) { toast('Catégorie non enregistrée : ' + e.message, 4000); }
     }
     await api(RP('/actions/workflows/generate.yml/dispatches'), { method: 'POST', body: { ref: 'main',
-      inputs: { sujet, ton: f.ton, categorie: categorie === 'défaut' ? '' : categorie, style: f.style, mode: f.mode || 'défaut', duree: f.duree ? String(f.duree) : '' } } });
+      inputs: { sujet, ton: f.ton, categorie: categorie === 'défaut' ? '' : categorie, style: f.style, format: f.format || 'auto', mode: f.mode || 'défaut', duree: f.duree ? String(f.duree) : '' } } });
     S.pending = { name: sujet, t: Date.now() };
     f.sujet = ''; f.catFree = ''; f.catSave = false; if (free) f.categorie = 'défaut';
     toast('🎬 C’est parti ! Suis la fabrication ici.');
@@ -557,12 +577,12 @@ async function launch() {
 }
 
 // ---------- 3. sujets du jour ----------
-// ligne d'issue : « Sujet — ton — catégorie — style » (style facultatif ; « - » = vide), comme scripts/job.py
+// ligne d'issue : « Sujet — ton — catégorie — style — format » (style et format facultatifs ; « - » = vide), comme scripts/job.py
 function parseLine(text) {
   let mark = MARKS.find(m => text.endsWith(m)) || null;
   if (mark) text = text.slice(0, -mark.length).trimEnd();
   const p = text.split(/\s+[—–]\s+/).map(x => x.trim()), v = x => (x && x !== '-' ? x : '');
-  return { sujet: p[0], ton: v(p[1]), cat: v(p[2]), style: v(p[3]), mark };
+  return { sujet: p[0], ton: v(p[1]), cat: v(p[2]), style: v(p[3]), format: v(p[4]), mark };
 }
 function topicLines(body) {
   return (body || '').split(/\r?\n/).map((l, i) => { const m = l.match(LINE); return m && { i, checked: /x/i.test(m[2]), raw: m[4], ...parseLine(m[4]) }; }).filter(Boolean);
@@ -584,7 +604,7 @@ function renderTopics() {
   const st = l => l.mark === '✅' ? ['ok', '✅ Livrée'] : l.mark === '⏳' ? ['run', '⏳ En cours'] : l.mark === '❌' ? ['ko', '↻ Réessayer'] : l.checked ? ['wait', 'En file'] : ['go', 'Lancer'];
   el.innerHTML = head + `<div class="card"><span class="lbl">${esc(iss.title)}</span>${lines.map((l, n) => {
     const [cls, txt] = st(l); const t = resolveKey(l.ton, S.tons), k = resolveKey(l.cat, S.cats), s = resolveStyle(l.style);
-    return `<div class="topic"><div class="txt"><b>${esc(l.sujet)}</b><div class="tags">${s ? `<span class="tag">${esc(styleLabel(s))}</span>` : ''}${t ? `<span class="tag">${esc(tonLabel(t))}</span>` : ''}${k ? `<span class="tag">${esc(catLabel(k))}</span>` : ''}</div></div>
+    return `<div class="topic"><div class="txt"><b>${esc(l.sujet)}</b><div class="tags">${s ? `<span class="tag">${esc(styleLabel(s))}</span>` : ''}${t ? `<span class="tag">${esc(tonLabel(t))}</span>` : ''}${k ? `<span class="tag">${esc(catLabel(k))}</span>` : ''}${l.format ? `<span class="tag">${esc(fmtLabel(l.format))}</span>` : ''}</div></div>
       <button class="state ${cls}" data-n="${n}" ${cls === 'go' || cls === 'ko' ? '' : 'disabled'}>${txt}</button></div>`;
   }).join('') || '<p class="muted">Aucune ligne de sujet dans cette issue.</p>'}</div>` + more;
   el.querySelectorAll('.state[data-n]:not([disabled])').forEach(b => b.onclick = () => topicSheet(lines[+b.dataset.n]));
@@ -618,6 +638,7 @@ function topicSheet(line) {
     <div class="field"><span class="lbl">Style</span><select id="s-style">${opts(S.styles.map(s => s.skill).filter(k => !locked(k)), st0, styleLabel)}</select></div>
     <div class="field"><span class="lbl">Ton</span><select id="s-ton">${opts(Object.keys(S.tons), t, tonLabel)}</select></div>
     <div class="field"><span class="lbl">Catégorie</span><select id="s-cat">${catOpts(st0, k0)}</select></div>
+    <div class="field"><span class="lbl">Format narratif</span><select id="s-fmt">${opts(['auto', ...S.formats.map(x => x.k)], fmtOf(line.format) ? line.format : 'auto', fmtLabel)}</select></div>
     <p class="hint small" style="margin-bottom:14px">Durée et qualité : réglages par défaut (${esc(S.cfg.mode || 'rapide')}).</p>
     <button class="btn" id="s-go">🎬 Lancer la vidéo</button>
     <div style="height:8px"></div><button class="btn ghost" id="s-cancel">Annuler</button>`);
@@ -632,10 +653,10 @@ function topicSheet(line) {
       const iss = await api(RP('/issues/' + S.issue.number));
       const rows = (iss.body || '').split(/\r?\n/);
       const j = rows.findIndex(r => { const m = r.match(LINE); if (!m) return false; const p = parseLine(m[4]);
-        return p.sujet === line.sujet && p.ton === line.ton && p.cat === line.cat && p.style === line.style; });
+        return p.sujet === line.sujet && p.ton === line.ton && p.cat === line.cat && p.style === line.style && p.format === line.format; });
       if (j < 0) throw new Error('Cette ligne a changé entre-temps. Recharge les sujets.');
       const m = rows[j].match(LINE);
-      rows[j] = `${m[1]}x${m[3]}${sujet} — ${$('#s-ton', v).value} — ${clean($('#s-cat', v).value)} — ${$('#s-style', v).value}`;
+      rows[j] = `${m[1]}x${m[3]}${sujet} — ${$('#s-ton', v).value} — ${clean($('#s-cat', v).value)} — ${$('#s-style', v).value} — ${$('#s-fmt', v).value}`;
       await api(RP('/issues/' + S.issue.number), { method: 'PATCH', body: { body: rows.join('\n') } });
       S.pending = { name: sujet, t: Date.now() };
       v.remove(); toast('🎬 C’est parti !'); go('runs');
@@ -738,7 +759,7 @@ function descOf(rel) { const m = (rel.body || '').match(/Description[^\n]*\n+```
 function metaOf(rel) {
   const m = {}, line = (rel.body || '').split('\n').find(l => l.startsWith('Ton : ')) || '';
   for (const part of line.split(' · ')) { const i = part.indexOf(' : '); if (i > 0) m[part.slice(0, i).trim().toLowerCase()] = part.slice(i + 3).trim(); }
-  return { ton: m.ton || '', cat: m['catégorie'] || '', mode: m.mode || '', style: m.style || FLAT,
+  return { ton: m.ton || '', cat: m['catégorie'] || '', mode: m.mode || '', style: m.style || FLAT, format: m.format && m.format !== 'auto' ? m.format : '',
     duree: parseFloat(String(m['durée'] || '').replace(',', '.')) || null,
     titre: (rel.name || rel.tag_name).replace(/\s*\(\d{4}-\d{2}-\d{2}\)\s*$/, ''), date: rel.created_at };
 }
@@ -755,6 +776,7 @@ function renderVideos() {
         ${sel('vf-style', 'Style', uniq('style'), styleLabel, 'Tous')}
         ${sel('vf-cat', 'Catégorie', uniq('cat'), catLabel, 'Toutes')}
         ${sel('vf-ton', 'Ton', uniq('ton'), tonLabel, 'Tous')}
+        ${sel('vf-format', 'Format', uniq('format'), fmtLabel, 'Tous')}
       </div>
       <div class="row small" style="margin-top:10px"><span class="muted" id="vf-count"></span><button class="link" id="vf-reset">Réinitialiser</button></div>
     </div><div id="vlist"></div>
@@ -763,13 +785,13 @@ function renderVideos() {
   if (!all.length) return;
   const save = () => { storeJSON('vfilter', vf); renderVList(all); };
   $('#vf-q').oninput = e => { vf.q = e.target.value; save(); };
-  ['sort', 'style', 'cat', 'ton'].forEach(k => $('#vf-' + k).onchange = e => { vf[k] = e.target.value; save(); });
-  $('#vf-reset').onclick = () => { S.vf = { sort: 'recent', style: '', cat: '', ton: '', q: '' }; storeJSON('vfilter', S.vf); renderVideos(); };
+  ['sort', 'style', 'cat', 'ton', 'format'].forEach(k => $('#vf-' + k).onchange = e => { vf[k] = e.target.value; save(); });
+  $('#vf-reset').onclick = () => { S.vf = { sort: 'recent', style: '', cat: '', ton: '', format: '', q: '' }; storeJSON('vfilter', S.vf); renderVideos(); };
   renderVList(all);
 }
 function renderVList(all) {
   const vf = S.vf, q = slug(vf.q).replace(/-/g, ' ');
-  let list = all.filter(({ r, m }) => (!vf.style || m.style === vf.style) && (!vf.cat || m.cat === vf.cat) && (!vf.ton || m.ton === vf.ton)
+  let list = all.filter(({ r, m }) => (!vf.style || m.style === vf.style) && (!vf.cat || m.cat === vf.cat) && (!vf.ton || m.ton === vf.ton) && (!vf.format || m.format === vf.format)
     && (!q || slug(m.titre + ' ' + (r.body || '').split('\n')[0]).replace(/-/g, ' ').includes(q)));
   const by = { recent: (a, b) => b.m.date.localeCompare(a.m.date), ancien: (a, b) => a.m.date.localeCompare(b.m.date),
     long: (a, b) => (b.m.duree ?? -1) - (a.m.duree ?? -1), court: (a, b) => (a.m.duree ?? 1e9) - (b.m.duree ?? 1e9),
@@ -780,7 +802,7 @@ function renderVList(all) {
     const mp4 = (r.assets || []).find(a => a.name.endsWith('.mp4')), d = descOf(r), i = S.releases.indexOf(r);
     return `<div class="card"><div class="vid"><div class="thumb">${CAT_EMOJI[m.cat] || (styleEmoji(m.style) === '🧊' ? '🧊' : '🎬')}</div><div class="info">
       <b>${esc(m.titre)}</b>
-      <div class="tags"><span class="tag">${esc(styleLabel(m.style))}</span>${m.ton ? `<span class="tag">${esc(tonLabel(m.ton))}</span>` : ''}${m.cat ? `<span class="tag">${esc(catLabel(m.cat))}</span>` : ''}${m.mode ? `<span class="tag">${m.mode === 'premium' ? '💎' : '⚡'} ${esc(m.mode)}</span>` : ''}</div>
+      <div class="tags"><span class="tag">${esc(styleLabel(m.style))}</span>${m.ton ? `<span class="tag">${esc(tonLabel(m.ton))}</span>` : ''}${m.cat ? `<span class="tag">${esc(catLabel(m.cat))}</span>` : ''}${m.format ? `<span class="tag">${esc(fmtLabel(m.format))}</span>` : ''}${m.mode ? `<span class="tag">${m.mode === 'premium' ? '💎' : '⚡'} ${esc(m.mode)}</span>` : ''}</div>
       <p class="meta">${new Date(m.date).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · ${ago(m.date)}${m.duree ? ` · ${Math.round(m.duree)} s` : ''}${mp4 ? ` · ${(mp4.size / 1048576).toFixed(0)} Mo` : ''}</p></div></div>
       ${d ? `<div class="desc">${esc(d)}</div>` : ''}
       <div class="btns">${mp4 ? `<a class="btn small" href="${esc(mp4.browser_download_url)}" target="_blank" rel="noopener">⬇️ Télécharger</a>` : ''}
@@ -802,6 +824,7 @@ async function renderSettings() {
   el.innerHTML = `<h1 class="title">Réglages</h1><p class="lead">Les choix utilisés quand tu laisses « Par défaut », et pour les sujets du jour.</p>
     <div class="card">
       <div class="field"><span class="lbl">Style par défaut</span><select id="d-style">${opts(S.styles.map(s => s.skill).filter(k => !locked(k)), c.style || FLAT, styleLabel)}</select></div>
+      <div class="field" style="margin-top:12px"><span class="lbl">Format narratif par défaut</span><select id="d-fmt">${opts(['auto', ...S.formats.map(x => x.k)], fmtOf(c.format) ? c.format : 'auto', fmtLabel)}</select></div>
       <div class="field" style="margin-top:12px"><span class="lbl">Ton par défaut</span><select id="d-ton">${opts(Object.keys(S.tons), c.ton, tonLabel)}</select></div>
       <div class="field" style="margin-top:12px"><span class="lbl">Catégorie par défaut</span><select id="d-cat">${opts(Object.keys(S.cats), c.categorie, catLabel)}</select></div>
       <div class="field" style="margin-top:12px"><span class="lbl">Qualité par défaut</span><select id="d-mode">${opts(['rapide', 'premium'], c.mode, x => x === 'rapide' ? '⚡ Rapide' : '💎 Premium')}</select></div>
@@ -830,9 +853,9 @@ async function saveDefaults() {
       txt = re.test(txt) ? txt.replace(re, (_, a, __, cmt) => a + val + (cmt || '')) : `${key}: ${val}\n` + txt;
     };
     const dur = $('#d-dur').value;
-    set('style', $('#d-style').value); set('ton', $('#d-ton').value); set('categorie', $('#d-cat').value); set('mode', $('#d-mode').value); set('duree', dur ? dur : '""');
+    set('style', $('#d-style').value); set('format', $('#d-fmt').value); set('ton', $('#d-ton').value); set('categorie', $('#d-cat').value); set('mode', $('#d-mode').value); set('duree', dur ? dur : '""');
     await api(RP('/contents/config/settings.yml'), { method: 'PUT', body: { message: 'Réglages par défaut (app Studio)', content: b64enc(txt), sha: f.sha, branch: 'main' } });
-    Object.assign(S.cfg, jsyaml.load(txt)); S.form.mode = S.cfg.mode; S.form.style = S.cfg.style;
+    Object.assign(S.cfg, jsyaml.load(txt)); S.form.mode = S.cfg.mode; S.form.style = S.cfg.style; S.form.format = S.cfg.format || 'auto';
     const c = storeJSON('config'); if (c) { c.cfg = S.cfg; storeJSON('config', c); }
     toast('✅ Réglages enregistrés');
   } catch (e) { b.insertAdjacentHTML('beforebegin', errorBox(e)); }
