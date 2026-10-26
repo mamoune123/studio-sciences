@@ -219,7 +219,7 @@ const CAT_EMOJI = { 'corps-humain': '🫀', 'animaux': '🐾', 'espace': '🪐',
   'histoire': '🏛️', 'enquete': '🕵️', 'mysteres': '🔮', 'psychologie': '🧠' };
 // étapes de generate.yml regroupées en phases lisibles (préfixes des noms d'étapes)
 const PHASES = [
-  { k: 'prep', e: '🧰', n: 'Prépa', steps: ['Set up job', 'Run actions/', 'Dépendances', 'Choix du sujet', 'Marquer « en cours »', 'Cache Playwright', 'Chromium'] },
+  { k: 'prep', e: '🧰', n: 'Prépa', steps: ['Set up job', 'Run actions/', 'Dépendances', 'Choix du sujet', 'Machine de rendu', 'Marquer « en cours »', 'Mac éveillé', 'Cache Playwright', 'Chromium'] },
   { k: 'script', e: '✍️', n: 'Script', steps: ['Prompt du script', 'Script (Claude)', 'Vérification du script'] },
   { k: 'voix', e: '🎙️', n: 'Voix', steps: ['Voix ElevenLabs'] },
   { k: 'anim', e: '🎨', n: 'Animation', steps: ["Prompt de l'animation", 'Animation (Claude)', 'Contrôle (build', 'Prompt de correction', 'Correction', 'Contrôle après correction'] },
@@ -645,11 +645,14 @@ function topicSheet(line) {
 
 // ---------- 4. suivi ----------
 function phaseOf(name) { return PHASES.findIndex(p => p.steps.some(s => name.startsWith(s))); }
-function analyse(run, steps) {
+// jobs du run : « route » (choix du sujet, machine) puis « video » (sur GitHub, ou sur le Mac pour la 3D)
+function analyse(run, jobs) {
+  const steps = jobs.flatMap(j => j.steps || []), vj = jobs.find(j => j.name === 'video');
+  const mac = !!vj && (vj.labels || []).includes('gpu');
   const by = n => steps.find(s => s.name.startsWith(n));
   const marked = by('Marquer « en cours »');
   const info = { noop: run.status === 'completed' && (!marked || marked.conclusion === 'skipped'),
-    voice: by('Voix ElevenLabs')?.conclusion === 'success', phase: -1, step: '' };
+    voice: by('Voix ElevenLabs')?.conclusion === 'success', phase: -1, step: '', mac, waitMac: mac && vj.status === 'queued' };
   const cur = steps.find(s => s.status === 'in_progress');
   if (cur) { info.phase = phaseOf(cur.name); info.step = cur.name; }
   else { const done = steps.filter(s => s.conclusion === 'success' && phaseOf(s.name) >= 0); info.phase = done.length ? phaseOf(done[done.length - 1].name) : 0; }
@@ -667,7 +670,7 @@ async function refreshRuns(fresh, quiet) {
     await Promise.all(runs.map(async r => {
       if (r.status === 'completed' && cache[r.id]) { S.runInfo[r.id] = cache[r.id]; return; }
       const j = await api(RP(`/actions/runs/${r.id}/jobs`));
-      const info = analyse(r, (j.jobs[0] || {}).steps || []);
+      const info = analyse(r, j.jobs || []);
       S.runInfo[r.id] = info; if (r.status === 'completed') cache[r.id] = info;
     }));
     storeJSON('runinfo', Object.fromEntries(Object.entries(cache).slice(-60)));
@@ -693,12 +696,12 @@ function renderRuns() {
   html += S.runs.map(r => {
     const i = S.runInfo[r.id] || {}, live = r.status !== 'completed';
     const ok = r.conclusion === 'success', ko = !live && !ok;
-    const pill = live ? (r.status === 'queued' || r.status === 'waiting' || r.status === 'pending' ? `<span class="pill wait">En attente</span>` : `<span class="pill run"><span class="spin"></span>${mins(r.run_started_at || r.created_at)} min</span>`)
+    const pill = live ? (i.waitMac ? `<span class="pill wait">🖥️ En attente du Mac</span>` : r.status === 'queued' || r.status === 'waiting' || r.status === 'pending' ? `<span class="pill wait">En attente</span>` : `<span class="pill run"><span class="spin"></span>${mins(r.run_started_at || r.created_at)} min</span>`)
       : ok ? `<span class="pill ok">✅ Livrée</span>` : r.conclusion === 'cancelled' ? `<span class="pill wait">Annulée</span>` : `<span class="pill ko">❌ Échec</span>`;
     const pct = ok ? 100 : Math.round(((Math.max(0, i.phase) + (live ? .5 : 1)) / PHASES.length) * 100);
     const steps = live || ko ? `<div class="bar"><i style="width:${pct}%"></i></div><div class="phases">${PHASES.map((p, n) =>
       `<div class="ph ${n < i.phase || ok ? 'done' : n === i.phase ? (live ? 'cur' : 'done') : ''}"><span class="d">${n === i.phase && ko ? '⚠️' : p.e}</span>${p.n}</div>`).join('')}</div>` : '';
-    const meta = live ? (i.step ? `En ce moment : ${esc(i.step)}` : 'Démarrage…')
+    const meta = live ? (i.waitMac ? 'Vidéo 3D : elle démarrera dès que le Mac est allumé, session ouverte.' : (i.mac ? '🖥️ Rendu sur le Mac · ' : '') + (i.step ? `En ce moment : ${esc(i.step)}` : 'Démarrage…'))
       : `${ago(r.created_at)} · ${mins(r.run_started_at || r.created_at, r.updated_at)} min` + (ko && i.failedStep ? ` · bloqué à « ${esc(i.failedStep)} »` : '');
     const btns = [
       live ? `<button class="btn small danger" data-cancel="${r.id}">Annuler</button>` : '',
