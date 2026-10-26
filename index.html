@@ -81,6 +81,7 @@ select { appearance: none; -webkit-appearance: none; background-image: linear-gr
 .opt b { display: block; font-size: 16px; margin-bottom: 3px; }
 .opt span { color: var(--muted); font-size: 13px; }
 .opt.on { border-color: var(--accent); background: rgba(255, 207, 63, .1); }
+.opt[disabled] { opacity: .45; }
 .opt .def { display: inline-block; margin-left: 4px; font-size: 10.5px; font-weight: 700; padding: 1px 6px; border-radius: 6px; background: var(--line); color: var(--muted); vertical-align: 2px; }
 .btn {
   display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 16px; border-radius: 18px;
@@ -320,11 +321,13 @@ function applyConfig(c) {
   if (!S.tonOpts.length) S.tonOpts = Object.keys(S.tons);
   if (!S.styles?.length) S.styles = [{ skill: FLAT, style: 'flat-vector', nom: 'Flat vector', moteur: 'canvas 2D', desc: '' }];
   if (!S.form.mode) S.form.mode = S.cfg.mode || 'rapide';
-  if (!styleOf(S.form.style)) S.form.style = styleOf(S.cfg.style) ? S.cfg.style : S.styles[0].skill;
+  if (!styleOf(S.form.style) || locked(S.form.style)) S.form.style = styleOf(S.cfg.style) && !locked(S.cfg.style) ? S.cfg.style : FLAT;
 }
 const tonName = k => S.tons[k]?.nom || k || '';
 const catName = k => S.cats[k]?.nom || k || '';
 const styleOf = k => (S.styles || []).find(s => s.skill === k);
+// 3D/WebGL : sans GPU, des heures de rendu sur GitHub ; disponible quand le Mac rend (rendu_mac: true, comme job.py)
+const locked = k => /3d|three|webgl/i.test(`${styleOf(k)?.moteur || ''} ${k}`) && !S.cfg.rendu_mac;
 const styleName = k => styleOf(k)?.nom || k || '';
 const styleEmoji = k => /3d/i.test((styleOf(k)?.moteur || '') + ' ' + k) ? '🧊' : '✏️';
 const tonLabel = k => `${TON_EMOJI[k] || '🎭'} ${tonName(k)}`;
@@ -447,8 +450,9 @@ function renderCreate() {
     <p class="lead">Choisis un style et un sujet : Claude écrit, ElevenLabs parle, l'agent anime.</p>
     <div class="card">
       <span class="lbl">Style</span>
-      <div class="styles">${S.styles.map(s => `<button class="opt ${f.style === s.skill ? 'on' : ''}" data-style="${esc(s.skill)}">
-        <b>${esc(styleLabel(s.skill))}${c.style === s.skill ? '<span class="def">DÉFAUT</span>' : ''}</b><span>${esc(shortDesc(s.desc))}</span></button>`).join('')}</div>
+      <div class="styles">${S.styles.map(s => `<button class="opt ${f.style === s.skill ? 'on' : ''}" data-style="${esc(s.skill)}" ${locked(s.skill) ? 'disabled' : ''}>
+        <b>${esc(styleLabel(s.skill))}${c.style === s.skill ? '<span class="def">DÉFAUT</span>' : ''}${locked(s.skill) ? '<span class="def">BIENTÔT</span>' : ''}</b>
+        <span>${esc(locked(s.skill) ? 'Rendu 3D : il faudra ton Mac (GPU) comme machine de rendu.' : shortDesc(s.desc))}</span></button>`).join('')}</div>
       ${styleEmoji(f.style) === '🧊' ? '<p class="hint">Rendu 3D : compte 15 à 30 minutes de plus.</p>' : ''}
     </div>
     <div class="card">
@@ -606,12 +610,12 @@ function sheet(html) {
 }
 function topicSheet(line) {
   const t = resolveKey(line.ton, S.tons) || S.cfg.ton, k0 = resolveKey(line.cat, S.cats) || S.cfg.categorie;
-  let st0 = resolveStyle(line.style) || S.cfg.style; if (!styleOf(st0)) st0 = S.styles[0].skill;
+  let st0 = resolveStyle(line.style) || S.cfg.style; if (!styleOf(st0) || locked(st0)) st0 = FLAT;
   const opts = (list, cur, lab) => list.map(x => `<option value="${esc(x)}" ${x === cur ? 'selected' : ''}>${esc(lab(x))}</option>`).join('');
   const catOpts = (st, cur) => { const l = catsFor(st); if (cur && !l.includes(cur)) l.unshift(cur); return opts(l, cur, catLabel); };
   const v = sheet(`<h2>Lancer ce sujet</h2>
     <div class="field"><span class="lbl">Sujet</span><textarea id="s-sujet" rows="3">${esc(line.sujet)}</textarea></div>
-    <div class="field"><span class="lbl">Style</span><select id="s-style">${opts(S.styles.map(s => s.skill), st0, styleLabel)}</select></div>
+    <div class="field"><span class="lbl">Style</span><select id="s-style">${opts(S.styles.map(s => s.skill).filter(k => !locked(k)), st0, styleLabel)}</select></div>
     <div class="field"><span class="lbl">Ton</span><select id="s-ton">${opts(Object.keys(S.tons), t, tonLabel)}</select></div>
     <div class="field"><span class="lbl">Catégorie</span><select id="s-cat">${catOpts(st0, k0)}</select></div>
     <p class="hint small" style="margin-bottom:14px">Durée et qualité : réglages par défaut (${esc(S.cfg.mode || 'rapide')}).</p>
@@ -794,7 +798,7 @@ async function renderSettings() {
   const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
   el.innerHTML = `<h1 class="title">Réglages</h1><p class="lead">Les choix utilisés quand tu laisses « Par défaut », et pour les sujets du jour.</p>
     <div class="card">
-      <div class="field"><span class="lbl">Style par défaut</span><select id="d-style">${opts(S.styles.map(s => s.skill), c.style || FLAT, styleLabel)}</select></div>
+      <div class="field"><span class="lbl">Style par défaut</span><select id="d-style">${opts(S.styles.map(s => s.skill).filter(k => !locked(k)), c.style || FLAT, styleLabel)}</select></div>
       <div class="field" style="margin-top:12px"><span class="lbl">Ton par défaut</span><select id="d-ton">${opts(Object.keys(S.tons), c.ton, tonLabel)}</select></div>
       <div class="field" style="margin-top:12px"><span class="lbl">Catégorie par défaut</span><select id="d-cat">${opts(Object.keys(S.cats), c.categorie, catLabel)}</select></div>
       <div class="field" style="margin-top:12px"><span class="lbl">Qualité par défaut</span><select id="d-mode">${opts(['rapide', 'premium'], c.mode, x => x === 'rapide' ? '⚡ Rapide' : '💎 Premium')}</select></div>
