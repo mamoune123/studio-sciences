@@ -110,6 +110,15 @@ input[type=range]:disabled { opacity: .35; }
 .spin { width: 18px; height: 18px; border-radius: 50%; border: 2.5px solid rgba(255,255,255,.25); border-top-color: currentColor; animation: spin .8s linear infinite; display: inline-block; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+.styles { display: grid; gap: 10px; }
+.check { display: flex; align-items: center; gap: 10px; margin-top: 12px; color: var(--muted); font-size: 14.5px; font-weight: 600; }
+.check input { width: 22px; height: 22px; accent-color: var(--violet); margin: 0; }
+.filters input[type=search] { width: 100%; background: var(--bg2); border: 1.5px solid var(--line); border-radius: 14px; padding: 12px 14px; font-size: 16px; outline: none; -webkit-appearance: none; }
+.fgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+.fgrid label span { display: block; font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin: 0 0 5px 2px; }
+.fgrid select { padding: 10px 32px 10px 12px; font-size: 15px; border-radius: 12px; }
+.link { color: var(--accent); font-weight: 700; font-size: 13.5px; padding: 4px 0; }
+
 /* ---------- topics ---------- */
 .topic { display: flex; gap: 12px; align-items: flex-start; }
 .topic + .topic { border-top: 1px solid rgba(255,255,255,.06); padding-top: 14px; margin-top: 14px; }
@@ -205,7 +214,8 @@ input[type=range]:disabled { opacity: .35; }
 // « Run workflow » de generate.yml, ou une case cochée dans l'issue « sujets » du jour.
 
 const TON_EMOJI = { 'scientifique': '🔬', 'comique-scientifique': '😂', 'science-fiction': '🚀', 'absurde': '🤪', 'ironique-scientifique': '😏' };
-const CAT_EMOJI = { 'corps-humain': '🫀', 'animaux': '🐾', 'espace': '🪐', 'physique': '⚡', 'chimie': '🧪', 'terre-climat': '🌋', 'technologie': '🤖', 'histoire-sciences': '📜' };
+const CAT_EMOJI = { 'corps-humain': '🫀', 'animaux': '🐾', 'espace': '🪐', 'physique': '⚡', 'chimie': '🧪', 'terre-climat': '🌋', 'technologie': '🤖', 'histoire-sciences': '📜',
+  'histoire': '🏛️', 'enquete': '🕵️', 'mysteres': '🔮', 'psychologie': '🧠' };
 // étapes de generate.yml regroupées en phases lisibles (préfixes des noms d'étapes)
 const PHASES = [
   { k: 'prep', e: '🧰', n: 'Prépa', steps: ['Set up job', 'Run actions/', 'Dépendances', 'Choix du sujet', 'Marquer « en cours »', 'Cache Playwright', 'Chromium'] },
@@ -232,7 +242,8 @@ const storeJSON = (k, v) => { if (v === undefined) { try { return JSON.parse(sto
 const S = {
   tok: store('tok'), repo: store('repo') || '', view: store('view') || 'create',
   cfg: {}, tons: {}, cats: {}, tonOpts: [], catOpts: [],
-  form: { sujet: '', ton: 'défaut', categorie: 'défaut', mode: '', duree: '' },
+  form: { sujet: '', ton: 'défaut', categorie: 'défaut', mode: '', duree: '', style: '', catFree: '', catSave: false },
+  vf: storeJSON('vfilter') || { sort: 'recent', style: '', cat: '', ton: '', q: '' },
   issue: null, runs: [], runInfo: {}, names: storeJSON('names') || {}, pending: null, releases: [],
   timer: null, loaded: {},
 };
@@ -261,32 +272,75 @@ const RP = p => '/repos/' + S.repo + p;
 const b64dec = s => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/\s/g, '')), c => c.charCodeAt(0)));
 const b64enc = s => { const b = new TextEncoder().encode(s); let o = ''; for (const x of b) o += String.fromCharCode(x); return btoa(o); };
 
-// ---------- config (tons, catégories, réglages) ----------
+// ---------- config (styles, tons, catégories, réglages) ----------
+// Les styles sont les agents du Creative Lab : table « Styles produits » de agents/INDEX.md (recopiée par
+// scripts/sync_agents.py), puis l'en-tête de chaque SKILL.md (jamais le reste ni le kit). Relu à chaque lancement :
+// un agent créé automatiquement apparaît tout seul.
+const FLAT = 'flat-vector-videos';
+function parseIndex(md) {
+  const rows = []; let inside = false;
+  for (const line of md.split('\n')) {
+    if (line.startsWith('## ')) { inside = /^## styles produits/i.test(line.trim()); continue; }
+    if (!inside || !line.startsWith('|')) continue;
+    const c = line.trim().replace(/^\||\|$/g, '').split('|').map(x => x.trim());
+    if (c.length < 4 || c[0] === 'style' || !/^[a-z0-9][a-z0-9-]*$/.test(c[1])) continue;
+    rows.push({ style: c[0], skill: c[1], moteur: c[2], desc: c[3] });
+  }
+  return rows;
+}
+function skillHeader(md) {
+  const head = md.split('\n## ')[0];
+  const fm = (head.match(/^---\n([\s\S]*?)\n---/) || [])[1] || '';
+  const get = k => (fm.match(new RegExp('^' + k + ':\\s*"?(.*?)"?\\s*$', 'm')) || [])[1] || '';
+  return { name: get('name'), description: get('description'), titre: ((head.match(/^# (.+)$/m) || [])[1] || '').trim() };
+}
+async function loadStyles() {
+  let rows = [];
+  try { rows = parseIndex(await api(RP('/contents/agents/INDEX.md?ref=main'), { raw: true })); } catch (e) {}
+  if (!rows.some(r => r.skill === FLAT)) rows.unshift({ style: 'flat-vector', skill: FLAT, moteur: 'canvas 2D', desc: 'Explainer science 2D vectoriel.' });
+  const out = await Promise.all(rows.map(async r => {
+    try { const h = skillHeader(await api(RP(`/contents/.claude/skills/${r.skill}/SKILL.md?ref=main`), { raw: true })); return { ...r, nom: h.titre || r.style }; }
+    catch (e) { return null; }   // listé au registre mais pas encore recopié dans le dépôt
+  }));
+  return out.filter(Boolean);
+}
 async function loadConfig() {
   const files = ['config/settings.yml', 'config/tons.yml', 'config/categories.yml', '.github/workflows/generate.yml'];
-  const [set, tons, cats, wf] = await Promise.all(files.map(p => api(RP('/contents/' + p + '?ref=main'), { raw: true })));
+  const [[set, tons, cats, wf], styles] = await Promise.all([Promise.all(files.map(p => api(RP('/contents/' + p + '?ref=main'), { raw: true }))), loadStyles()]);
   const w = jsyaml.load(wf) || {};
   const inputs = ((w.on || w[true] || {}).workflow_dispatch || {}).inputs || {};
-  const c = { cfg: jsyaml.load(set) || {}, tons: jsyaml.load(tons) || {}, cats: jsyaml.load(cats) || {},
-    tonOpts: (inputs.ton?.options || []).filter(x => x !== 'défaut'), catOpts: (inputs.categorie?.options || []).filter(x => x !== 'défaut') };
+  const c = { cfg: jsyaml.load(set) || {}, tons: jsyaml.load(tons) || {}, cats: jsyaml.load(cats) || {}, styles,
+    tonOpts: (inputs.ton?.options || []).filter(x => x !== 'défaut') };
   applyConfig(c); storeJSON('config', c);
 }
 function applyConfig(c) {
   if (!c) return;
   Object.assign(S, c);
-  // « Run workflow » n'accepte que les choix listés dans generate.yml
+  // « Run workflow » n'accepte que les tons listés dans generate.yml ; catégorie et style sont des champs libres
   if (!S.tonOpts.length) S.tonOpts = Object.keys(S.tons);
-  if (!S.catOpts.length) S.catOpts = Object.keys(S.cats);
+  if (!S.styles?.length) S.styles = [{ skill: FLAT, style: 'flat-vector', nom: 'Flat vector', moteur: 'canvas 2D', desc: '' }];
   if (!S.form.mode) S.form.mode = S.cfg.mode || 'rapide';
+  if (!styleOf(S.form.style)) S.form.style = styleOf(S.cfg.style) ? S.cfg.style : S.styles[0].skill;
 }
 const tonName = k => S.tons[k]?.nom || k || '';
 const catName = k => S.cats[k]?.nom || k || '';
+const styleOf = k => (S.styles || []).find(s => s.skill === k);
+const styleName = k => styleOf(k)?.nom || k || '';
+const styleEmoji = k => /3d/i.test((styleOf(k)?.moteur || '') + ' ' + k) ? '🧊' : '✏️';
 const tonLabel = k => `${TON_EMOJI[k] || '🎭'} ${tonName(k)}`;
-const catLabel = k => `${CAT_EMOJI[k] || '📚'} ${catName(k)}`;
+const catLabel = k => `${CAT_EMOJI[k] || (S.cats[k] ? '📚' : '🏷️')} ${catName(k)}`;
+const styleLabel = k => `${styleEmoji(k)} ${styleName(k)}`;
+// catégories proposées pour un style : celles qui le listent, plus celles sans liste (valables pour tous)
+function catsFor(st) {
+  const l = Object.keys(S.cats).filter(k => { const s = S.cats[k]?.styles; return !Array.isArray(s) || !s.length || s.includes(st); });
+  return l.length ? l : Object.keys(S.cats);
+}
+const shortDesc = d => { const s = String(d || '').split(/ : |[.;(]/)[0].trim(); return s.length > 90 ? s.slice(0, 88) + '…' : s; };
 function resolveKey(v, table) {
   const s = slug(v); if (!s) return '';
   return Object.keys(table).find(k => k === s || slug(table[k]?.nom) === s) || v;
 }
+const resolveStyle = v => { const s = slug(v); return s ? ((S.styles || []).find(x => x.skill === s || slug(x.nom) === s || slug(x.style) === s)?.skill || v) : ''; };
 const slug = v => String(v || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
 // ---------- navigation ----------
@@ -382,26 +436,39 @@ function renderSetup() {
 // ---------- 2. créer ----------
 function renderCreate() {
   const f = S.form, c = S.cfg, el = $('#v-create');
-  if (!S.tonOpts.length) { loading(el, 'Chargement des tons…'); loadConfig().then(() => S.view === 'create' && renderCreate()).catch(e => el.innerHTML = errorBox(e)); return; }
+  if (!S.tonOpts.length) { loading(el, 'Chargement des styles…'); loadConfig().then(() => S.view === 'create' && renderCreate()).catch(e => el.innerHTML = errorBox(e)); return; }
   const chip = (field, v, label) => `<button class="chip ${f[field] === v ? 'on' : ''}" data-f="${field}" data-v="${esc(v)}">${esc(label)}</button>`;
   const autoDur = !f.duree;
+  const cats = catsFor(f.style), defOk = cats.includes(c.categorie);
+  if (f.categorie === 'défaut' && !defOk) f.categorie = cats[0];
+  if (!['défaut', 'autre'].includes(f.categorie) && !cats.includes(f.categorie)) f.categorie = defOk ? 'défaut' : cats[0];
   el.innerHTML = `
     <h1 class="title">Nouvelle vidéo</h1>
-    <p class="lead">Choisis un sujet, Claude écrit, ElevenLabs parle, l'animation suit.</p>
+    <p class="lead">Choisis un style et un sujet : Claude écrit, ElevenLabs parle, l'agent anime.</p>
+    <div class="card">
+      <span class="lbl">Style</span>
+      <div class="styles">${S.styles.map(s => `<button class="opt ${f.style === s.skill ? 'on' : ''}" data-style="${esc(s.skill)}">
+        <b>${esc(styleLabel(s.skill))}${c.style === s.skill ? '<span class="def">DÉFAUT</span>' : ''}</b><span>${esc(shortDesc(s.desc))}</span></button>`).join('')}</div>
+      ${styleEmoji(f.style) === '🧊' ? '<p class="hint">Rendu 3D : compte 15 à 30 minutes de plus.</p>' : ''}
+    </div>
     <div class="card">
       <span class="lbl">Sujet</span>
       <textarea id="f-sujet" rows="3" maxlength="300" placeholder="Ex. Pourquoi les chats retombent toujours sur leurs pattes ?">${esc(f.sujet)}</textarea>
       <p class="hint">Pas d'idée ? <a href="#" data-goto="topics">Vois les sujets du jour →</a></p>
     </div>
     <div class="card">
+      <span class="lbl">Catégorie</span>
+      <div class="chips">${defOk ? chip('categorie', 'défaut', '⭐ Par défaut') : ''}${cats.map(k => chip('categorie', k, catLabel(k))).join('')}${chip('categorie', 'autre', '✏️ Autre…')}</div>
+      <div id="cat-free" class="${f.categorie === 'autre' ? '' : 'hidden'}" style="margin-top:12px">
+        <input type="text" id="f-catfree" maxlength="40" placeholder="Ex. Faits divers, Sport, Cuisine…" value="${esc(f.catFree || '')}">
+        <label class="check"><input type="checkbox" id="f-catsave" ${f.catSave ? 'checked' : ''}> Garder cette catégorie pour ce style</label>
+      </div>
+      <p class="hint" id="cat-hint"></p>
+    </div>
+    <div class="card">
       <span class="lbl">Ton</span>
       <div class="chips scroll">${chip('ton', 'défaut', '⭐ Par défaut')}${S.tonOpts.map(k => chip('ton', k, tonLabel(k))).join('')}</div>
       <p class="hint" id="ton-hint"></p>
-    </div>
-    <div class="card">
-      <span class="lbl">Catégorie</span>
-      <div class="chips">${chip('categorie', 'défaut', '⭐ Par défaut')}${S.catOpts.map(k => chip('categorie', k, catLabel(k))).join('')}</div>
-      <p class="hint" id="cat-hint"></p>
     </div>
     <div class="card">
       <div class="row"><span class="lbl" style="margin:0">Durée</span>
@@ -412,43 +479,71 @@ function renderCreate() {
     <div class="card">
       <span class="lbl">Qualité</span>
       <div class="grid2">
-        <button class="opt ${f.mode === 'rapide' ? 'on' : ''}" data-mode="rapide"><b>⚡ Rapide${c.mode === 'rapide' ? '<span class="def">DÉFAUT</span>' : ''}</b><span>Scènes de la bibliothèque, plus vite prête</span></button>
+        <button class="opt ${f.mode === 'rapide' ? 'on' : ''}" data-mode="rapide"><b>⚡ Rapide${c.mode === 'rapide' ? '<span class="def">DÉFAUT</span>' : ''}</b><span>Scènes toutes prêtes, plus vite prête</span></button>
         <button class="opt ${f.mode === 'premium' ? 'on' : ''}" data-mode="premium"><b>💎 Premium${c.mode === 'premium' ? '<span class="def">DÉFAUT</span>' : ''}</b><span>Animation sur mesure, prend plus de temps</span></button>
       </div>
     </div>
     <button class="btn" id="launch">🎬 Lancer la vidéo</button>
-    <p class="hint small" style="text-align:center">Compte entre 10 et 35 minutes. Tu peux fermer l'app pendant ce temps.</p>`;
+    <p class="hint small" style="text-align:center">Compte entre 10 et 35 minutes (plus en 3D). Tu peux fermer l'app pendant ce temps.</p>`;
   const hints = () => {
     const t = f.ton === 'défaut' ? c.ton : f.ton, k = f.categorie === 'défaut' ? c.categorie : f.categorie;
     const v = String(S.tons[t]?.voix || '').trim().split(/(?<=\.)\s/)[0];
     $('#ton-hint').textContent = (f.ton === 'défaut' ? `Par défaut : ${tonName(t)}. ` : '') + v;
     const ideas = S.cats[k]?.idees || [];
-    $('#cat-hint').textContent = (f.categorie === 'défaut' ? `Par défaut : ${catName(k)}. ` : '') + (ideas.length ? 'Idées : ' + ideas.join(', ') + '.' : '');
+    $('#cat-hint').textContent = f.categorie === 'autre' ? 'Écris le genre de vidéo que tu veux : Claude adapte le récit (ex. « Faits divers », « Sport »).'
+      : (f.categorie === 'défaut' ? `Par défaut : ${catName(k)}. ` : '') + (ideas.length ? 'Idées : ' + ideas.join(', ') + '.' : '');
     const auto = $('#f-auto').checked;
     $('#dur-val').textContent = auto ? (c.duree ? `Réglage par défaut : ${c.duree} s` : 'Automatique (29 à 59 s selon le sujet)') : `${$('#f-duree').value} s`;
     $('#dur-val').classList.toggle('off', auto);
   };
   hints();
   $('#f-sujet').oninput = e => { f.sujet = e.target.value; };
+  el.querySelectorAll('[data-style]').forEach(b => b.onclick = () => { f.style = b.dataset.style; renderCreate(); });
   el.querySelectorAll('.chip').forEach(b => b.onclick = () => {
     f[b.dataset.f] = b.dataset.v;
     el.querySelectorAll(`.chip[data-f="${b.dataset.f}"]`).forEach(x => x.classList.toggle('on', x === b));
+    if (b.dataset.f === 'categorie') { $('#cat-free').classList.toggle('hidden', f.categorie !== 'autre'); if (f.categorie === 'autre') $('#f-catfree').focus(); }
     hints();
   });
-  el.querySelectorAll('.opt').forEach(b => b.onclick = () => { f.mode = b.dataset.mode; el.querySelectorAll('.opt').forEach(x => x.classList.toggle('on', x === b)); });
+  $('#f-catfree').oninput = e => { f.catFree = e.target.value; };
+  $('#f-catsave').onchange = e => { f.catSave = e.target.checked; };
+  el.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { f.mode = b.dataset.mode; el.querySelectorAll('[data-mode]').forEach(x => x.classList.toggle('on', x === b)); });
   $('#f-auto').onchange = e => { $('#f-duree').disabled = e.target.checked; f.duree = e.target.checked ? '' : $('#f-duree').value; hints(); };
   $('#f-duree').oninput = e => { f.duree = e.target.value; hints(); };
   $('#launch').onclick = launch;
 }
+// ajoute une catégorie libre à config/categories.yml pour ce style (ou ajoute le style à une catégorie du même nom)
+async function saveCategory(nom, style) {
+  const key = slug(nom); if (!key) return;
+  const f = await api(RP('/contents/config/categories.yml?ref=main'));
+  let txt = b64dec(f.content);
+  const m = txt.match(new RegExp(`^${key}:\\n((?:[ \\t]+.*\\n?)*)`, 'm'));
+  if (m) {
+    const sl = m[1].match(/^([ \t]+styles:[ \t]*\[)([^\]]*)\]/m);
+    if (!sl || sl[2].split(',').map(x => x.trim()).includes(style)) return;   // déjà valable pour ce style
+    const block = m[0].replace(sl[0], `${sl[1]}${sl[2].trim() ? sl[2].trim() + ', ' : ''}${style}]`);
+    txt = txt.replace(m[0], block);
+  } else {
+    txt = txt.replace(/\n*$/, '\n') + `${key}:\n  nom: ${JSON.stringify(nom)}\n  idees: []\n  styles: [${style}]\n`;
+  }
+  await api(RP('/contents/config/categories.yml'), { method: 'PUT', body: { message: `Catégorie « ${nom} » (app Studio)`, content: b64enc(txt), sha: f.sha, branch: 'main' } });
+  S.cats = jsyaml.load(txt) || S.cats;
+  const c = storeJSON('config'); if (c) { c.cats = S.cats; storeJSON('config', c); }
+}
 async function launch() {
   const f = S.form, sujet = f.sujet.trim();
   if (!sujet) { toast('Écris d’abord un sujet 🙂'); $('#f-sujet').focus(); return; }
+  const free = f.categorie === 'autre', categorie = free ? (f.catFree || '').replace(/\s+/g, ' ').replace(/ [—–] /g, ' - ').trim() : f.categorie;
+  if (free && !categorie) { toast('Écris la catégorie (ou choisis-en une)'); $('#f-catfree').focus(); return; }
   const b = $('#launch'); b.disabled = true; b.innerHTML = '<span class="spin"></span> Envoi…';
   try {
+    if (free && f.catSave) {
+      try { await saveCategory(categorie, f.style); } catch (e) { toast('Catégorie non enregistrée : ' + e.message, 4000); }
+    }
     await api(RP('/actions/workflows/generate.yml/dispatches'), { method: 'POST', body: { ref: 'main',
-      inputs: { sujet, ton: f.ton, categorie: f.categorie, mode: f.mode || 'défaut', duree: f.duree ? String(f.duree) : '' } } });
+      inputs: { sujet, ton: f.ton, categorie: categorie === 'défaut' ? '' : categorie, style: f.style, mode: f.mode || 'défaut', duree: f.duree ? String(f.duree) : '' } } });
     S.pending = { name: sujet, t: Date.now() };
-    f.sujet = '';
+    f.sujet = ''; f.catFree = ''; f.catSave = false; if (free) f.categorie = 'défaut';
     toast('🎬 C’est parti ! Suis la fabrication ici.');
     go('runs');
   } catch (e) {
@@ -458,11 +553,12 @@ async function launch() {
 }
 
 // ---------- 3. sujets du jour ----------
+// ligne d'issue : « Sujet — ton — catégorie — style » (style facultatif ; « - » = vide), comme scripts/job.py
 function parseLine(text) {
   let mark = MARKS.find(m => text.endsWith(m)) || null;
   if (mark) text = text.slice(0, -mark.length).trimEnd();
-  const p = text.split(/\s+[—–]\s+/).map(x => x.trim());
-  return { sujet: p[0], ton: p[1] || '', cat: p[2] || '', mark };
+  const p = text.split(/\s+[—–]\s+/).map(x => x.trim()), v = x => (x && x !== '-' ? x : '');
+  return { sujet: p[0], ton: v(p[1]), cat: v(p[2]), style: v(p[3]), mark };
 }
 function topicLines(body) {
   return (body || '').split(/\r?\n/).map((l, i) => { const m = l.match(LINE); return m && { i, checked: /x/i.test(m[2]), raw: m[4], ...parseLine(m[4]) }; }).filter(Boolean);
@@ -483,8 +579,8 @@ function renderTopics() {
   const lines = topicLines(iss.body);
   const st = l => l.mark === '✅' ? ['ok', '✅ Livrée'] : l.mark === '⏳' ? ['run', '⏳ En cours'] : l.mark === '❌' ? ['ko', '↻ Réessayer'] : l.checked ? ['wait', 'En file'] : ['go', 'Lancer'];
   el.innerHTML = head + `<div class="card"><span class="lbl">${esc(iss.title)}</span>${lines.map((l, n) => {
-    const [cls, txt] = st(l); const t = resolveKey(l.ton, S.tons), k = resolveKey(l.cat, S.cats);
-    return `<div class="topic"><div class="txt"><b>${esc(l.sujet)}</b><div class="tags">${t ? `<span class="tag">${esc(tonLabel(t))}</span>` : ''}${k ? `<span class="tag">${esc(catLabel(k))}</span>` : ''}</div></div>
+    const [cls, txt] = st(l); const t = resolveKey(l.ton, S.tons), k = resolveKey(l.cat, S.cats), s = resolveStyle(l.style);
+    return `<div class="topic"><div class="txt"><b>${esc(l.sujet)}</b><div class="tags">${s ? `<span class="tag">${esc(styleLabel(s))}</span>` : ''}${t ? `<span class="tag">${esc(tonLabel(t))}</span>` : ''}${k ? `<span class="tag">${esc(catLabel(k))}</span>` : ''}</div></div>
       <button class="state ${cls}" data-n="${n}" ${cls === 'go' || cls === 'ko' ? '' : 'disabled'}>${txt}</button></div>`;
   }).join('') || '<p class="muted">Aucune ligne de sujet dans cette issue.</p>'}</div>` + more;
   el.querySelectorAll('.state[data-n]:not([disabled])').forEach(b => b.onclick = () => topicSheet(lines[+b.dataset.n]));
@@ -509,27 +605,33 @@ function sheet(html) {
   document.body.appendChild(v); return v;
 }
 function topicSheet(line) {
-  const t = resolveKey(line.ton, S.tons) || S.cfg.ton, k = resolveKey(line.cat, S.cats) || S.cfg.categorie;
+  const t = resolveKey(line.ton, S.tons) || S.cfg.ton, k0 = resolveKey(line.cat, S.cats) || S.cfg.categorie;
+  let st0 = resolveStyle(line.style) || S.cfg.style; if (!styleOf(st0)) st0 = S.styles[0].skill;
   const opts = (list, cur, lab) => list.map(x => `<option value="${esc(x)}" ${x === cur ? 'selected' : ''}>${esc(lab(x))}</option>`).join('');
+  const catOpts = (st, cur) => { const l = catsFor(st); if (cur && !l.includes(cur)) l.unshift(cur); return opts(l, cur, catLabel); };
   const v = sheet(`<h2>Lancer ce sujet</h2>
     <div class="field"><span class="lbl">Sujet</span><textarea id="s-sujet" rows="3">${esc(line.sujet)}</textarea></div>
+    <div class="field"><span class="lbl">Style</span><select id="s-style">${opts(S.styles.map(s => s.skill), st0, styleLabel)}</select></div>
     <div class="field"><span class="lbl">Ton</span><select id="s-ton">${opts(Object.keys(S.tons), t, tonLabel)}</select></div>
-    <div class="field"><span class="lbl">Catégorie</span><select id="s-cat">${opts(Object.keys(S.cats), k, catLabel)}</select></div>
+    <div class="field"><span class="lbl">Catégorie</span><select id="s-cat">${catOpts(st0, k0)}</select></div>
     <p class="hint small" style="margin-bottom:14px">Durée et qualité : réglages par défaut (${esc(S.cfg.mode || 'rapide')}).</p>
     <button class="btn" id="s-go">🎬 Lancer la vidéo</button>
     <div style="height:8px"></div><button class="btn ghost" id="s-cancel">Annuler</button>`);
+  $('#s-style', v).onchange = e => { $('#s-cat', v).innerHTML = catOpts(e.target.value, $('#s-cat', v).value); };
   $('#s-cancel', v).onclick = () => v.remove();
   $('#s-go', v).onclick = async () => {
-    const sujet = $('#s-sujet', v).value.replace(/\s+/g, ' ').replace(/ [—–] /g, ' - ').trim(); if (!sujet) return;
+    const clean = s => s.replace(/\s+/g, ' ').replace(/ [—–] /g, ' - ').trim();
+    const sujet = clean($('#s-sujet', v).value); if (!sujet) return;
     const b = $('#s-go', v); b.disabled = true; b.innerHTML = '<span class="spin"></span> Envoi…';
     try {
       // relit l'issue juste avant : le pipeline y écrit ⏳ / ✅ pendant les rendus
       const iss = await api(RP('/issues/' + S.issue.number));
       const rows = (iss.body || '').split(/\r?\n/);
-      const j = rows.findIndex(r => { const m = r.match(LINE); if (!m) return false; const p = parseLine(m[4]); return p.sujet === line.sujet && p.ton === line.ton && p.cat === line.cat; });
+      const j = rows.findIndex(r => { const m = r.match(LINE); if (!m) return false; const p = parseLine(m[4]);
+        return p.sujet === line.sujet && p.ton === line.ton && p.cat === line.cat && p.style === line.style; });
       if (j < 0) throw new Error('Cette ligne a changé entre-temps. Recharge les sujets.');
       const m = rows[j].match(LINE);
-      rows[j] = `${m[1]}x${m[3]}${sujet} — ${$('#s-ton', v).value} — ${$('#s-cat', v).value}`;
+      rows[j] = `${m[1]}x${m[3]}${sujet} — ${$('#s-ton', v).value} — ${clean($('#s-cat', v).value)} — ${$('#s-style', v).value}`;
       await api(RP('/issues/' + S.issue.number), { method: 'PATCH', body: { body: rows.join('\n') } });
       S.pending = { name: sujet, t: Date.now() };
       v.remove(); toast('🎬 C’est parti !'); go('runs');
@@ -621,31 +723,64 @@ function renderRuns() {
 async function loadVideos(fresh) {
   const el = $('#v-videos');
   if (fresh && !S.releases.length) loading(el, 'Chargement des vidéos…');
-  try { S.releases = await api(RP('/releases?per_page=30')); renderVideos(); }
+  try { S.releases = await api(RP('/releases?per_page=100')); renderVideos(); }
   catch (e) { el.innerHTML = errorBox(e); }
 }
 function descOf(rel) { const m = (rel.body || '').match(/Description[^\n]*\n+```[^\n]*\n([\s\S]*?)```/); return m ? m[1].trim() : ''; }
+// « Ton : x · catégorie : y · mode : z · style : s · durée : 51.7 s » (notes écrites par scripts/deliver.py)
+function metaOf(rel) {
+  const m = {}, line = (rel.body || '').split('\n').find(l => l.startsWith('Ton : ')) || '';
+  for (const part of line.split(' · ')) { const i = part.indexOf(' : '); if (i > 0) m[part.slice(0, i).trim().toLowerCase()] = part.slice(i + 3).trim(); }
+  return { ton: m.ton || '', cat: m['catégorie'] || '', mode: m.mode || '', style: m.style || FLAT,
+    duree: parseFloat(String(m['durée'] || '').replace(',', '.')) || null,
+    titre: (rel.name || rel.tag_name).replace(/\s*\(\d{4}-\d{2}-\d{2}\)\s*$/, ''), date: rel.created_at };
+}
+const SORTS = { recent: 'Plus récentes', ancien: 'Plus anciennes', long: 'Plus longues', court: 'Plus courtes', az: 'Titre (A → Z)' };
 function renderVideos() {
-  const el = $('#v-videos');
-  let html = `<h1 class="title">Mes vidéos</h1><p class="lead">Télécharge, copie la description, publie sur TikTok.</p>`;
-  if (!S.releases.length) html += `<div class="card empty"><div class="e">🎞️</div>Aucune vidéo pour l'instant.</div>`;
-  html += S.releases.map((r, n) => {
-    const mp4 = (r.assets || []).find(a => a.name.endsWith('.mp4'));
-    const meta = ((r.body || '').match(/Ton : ([^·\n]+)· catégorie : ([^·\n]+)· mode : (\S+)/) || []);
-    const t = meta[1]?.trim(), k = meta[2]?.trim();
-    const d = descOf(r);
-    return `<div class="card"><div class="vid"><div class="thumb">${CAT_EMOJI[k] || '🎬'}</div><div class="info">
-      <b>${esc((r.name || r.tag_name).replace(/\s*\(\d{4}-\d{2}-\d{2}\)\s*$/, ''))}</b>
-      <div class="tags">${t ? `<span class="tag">${esc(tonLabel(t))}</span>` : ''}${meta[3] ? `<span class="tag">${meta[3] === 'premium' ? '💎' : '⚡'} ${esc(meta[3])}</span>` : ''}</div>
-      <p class="meta">${ago(r.created_at)}${mp4 ? ` · ${(mp4.size / 1048576).toFixed(0)} Mo` : ''}</p></div></div>
+  const el = $('#v-videos'), vf = S.vf, all = S.releases.map(r => ({ r, m: metaOf(r) }));
+  const uniq = k => [...new Set(all.map(x => x.m[k]).filter(Boolean))];
+  const sel = (id, label, list, lab, empty) => `<label><span>${label}</span><select id="${id}"><option value="">${empty}</option>${list.map(x => `<option value="${esc(x)}" ${vf[id.slice(3)] === x ? 'selected' : ''}>${esc(lab(x))}</option>`).join('')}</select></label>`;
+  el.innerHTML = `<h1 class="title">Mes vidéos</h1><p class="lead">Télécharge, copie la description, publie sur TikTok.</p>` + (all.length ? `
+    <div class="card filters">
+      <input type="search" id="vf-q" placeholder="🔎 Rechercher un titre ou un sujet" value="${esc(vf.q)}" autocomplete="off">
+      <div class="fgrid">
+        <label><span>Trier</span><select id="vf-sort">${Object.entries(SORTS).map(([k, v]) => `<option value="${k}" ${vf.sort === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+        ${sel('vf-style', 'Style', uniq('style'), styleLabel, 'Tous')}
+        ${sel('vf-cat', 'Catégorie', uniq('cat'), catLabel, 'Toutes')}
+        ${sel('vf-ton', 'Ton', uniq('ton'), tonLabel, 'Tous')}
+      </div>
+      <div class="row small" style="margin-top:10px"><span class="muted" id="vf-count"></span><button class="link" id="vf-reset">Réinitialiser</button></div>
+    </div><div id="vlist"></div>
+    <p class="hint small" style="text-align:center">Le téléchargement s'ouvre dans ton navigateur : connecte-toi une fois à GitHub dans Safari ou Chrome (dépôt privé).</p>`
+    : `<div class="card empty"><div class="e">🎞️</div>Aucune vidéo pour l'instant.</div>`);
+  if (!all.length) return;
+  const save = () => { storeJSON('vfilter', vf); renderVList(all); };
+  $('#vf-q').oninput = e => { vf.q = e.target.value; save(); };
+  ['sort', 'style', 'cat', 'ton'].forEach(k => $('#vf-' + k).onchange = e => { vf[k] = e.target.value; save(); });
+  $('#vf-reset').onclick = () => { S.vf = { sort: 'recent', style: '', cat: '', ton: '', q: '' }; storeJSON('vfilter', S.vf); renderVideos(); };
+  renderVList(all);
+}
+function renderVList(all) {
+  const vf = S.vf, q = slug(vf.q).replace(/-/g, ' ');
+  let list = all.filter(({ r, m }) => (!vf.style || m.style === vf.style) && (!vf.cat || m.cat === vf.cat) && (!vf.ton || m.ton === vf.ton)
+    && (!q || slug(m.titre + ' ' + (r.body || '').split('\n')[0]).replace(/-/g, ' ').includes(q)));
+  const by = { recent: (a, b) => b.m.date.localeCompare(a.m.date), ancien: (a, b) => a.m.date.localeCompare(b.m.date),
+    long: (a, b) => (b.m.duree ?? -1) - (a.m.duree ?? -1), court: (a, b) => (a.m.duree ?? 1e9) - (b.m.duree ?? 1e9),
+    az: (a, b) => a.m.titre.localeCompare(b.m.titre, 'fr') }[vf.sort] || (() => 0);
+  list = list.sort(by);
+  $('#vf-count').textContent = `${list.length} vidéo${list.length > 1 ? 's' : ''}${list.length < all.length ? ` sur ${all.length}` : ''}`;
+  $('#vlist').innerHTML = list.length ? list.map(({ r, m }) => {
+    const mp4 = (r.assets || []).find(a => a.name.endsWith('.mp4')), d = descOf(r), i = S.releases.indexOf(r);
+    return `<div class="card"><div class="vid"><div class="thumb">${CAT_EMOJI[m.cat] || (styleEmoji(m.style) === '🧊' ? '🧊' : '🎬')}</div><div class="info">
+      <b>${esc(m.titre)}</b>
+      <div class="tags"><span class="tag">${esc(styleLabel(m.style))}</span>${m.ton ? `<span class="tag">${esc(tonLabel(m.ton))}</span>` : ''}${m.cat ? `<span class="tag">${esc(catLabel(m.cat))}</span>` : ''}${m.mode ? `<span class="tag">${m.mode === 'premium' ? '💎' : '⚡'} ${esc(m.mode)}</span>` : ''}</div>
+      <p class="meta">${new Date(m.date).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · ${ago(m.date)}${m.duree ? ` · ${Math.round(m.duree)} s` : ''}${mp4 ? ` · ${(mp4.size / 1048576).toFixed(0)} Mo` : ''}</p></div></div>
       ${d ? `<div class="desc">${esc(d)}</div>` : ''}
       <div class="btns">${mp4 ? `<a class="btn small" href="${esc(mp4.browser_download_url)}" target="_blank" rel="noopener">⬇️ Télécharger</a>` : ''}
-        ${d ? `<button class="btn small ghost" data-copy="${n}">📋 Copier la description</button>` : ''}
+        ${d ? `<button class="btn small ghost" data-copy="${i}">📋 Copier la description</button>` : ''}
         <a class="btn small ghost" href="${esc(r.html_url)}" target="_blank" rel="noopener">Détails ↗</a></div></div>`;
-  }).join('');
-  if (S.releases.length) html += `<p class="hint small" style="text-align:center">Le téléchargement s'ouvre dans ton navigateur : connecte-toi une fois à GitHub dans Safari ou Chrome (dépôt privé).</p>`;
-  el.innerHTML = html;
-  el.querySelectorAll('[data-copy]').forEach(b => b.onclick = async () => {
+  }).join('') : `<div class="card empty"><div class="e">🔎</div>Aucune vidéo ne correspond à ces filtres.</div>`;
+  $('#vlist').querySelectorAll('[data-copy]').forEach(b => b.onclick = async () => {
     const d = descOf(S.releases[+b.dataset.copy]);
     try { await navigator.clipboard.writeText(d); toast('📋 Description copiée'); }
     catch (e) { const ta = document.createElement('textarea'); ta.value = d; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); toast('📋 Description copiée'); }
@@ -659,12 +794,16 @@ async function renderSettings() {
   const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
   el.innerHTML = `<h1 class="title">Réglages</h1><p class="lead">Les choix utilisés quand tu laisses « Par défaut », et pour les sujets du jour.</p>
     <div class="card">
-      <div class="field"><span class="lbl">Ton par défaut</span><select id="d-ton">${opts(Object.keys(S.tons), c.ton, tonLabel)}</select></div>
+      <div class="field"><span class="lbl">Style par défaut</span><select id="d-style">${opts(S.styles.map(s => s.skill), c.style || FLAT, styleLabel)}</select></div>
+      <div class="field" style="margin-top:12px"><span class="lbl">Ton par défaut</span><select id="d-ton">${opts(Object.keys(S.tons), c.ton, tonLabel)}</select></div>
       <div class="field" style="margin-top:12px"><span class="lbl">Catégorie par défaut</span><select id="d-cat">${opts(Object.keys(S.cats), c.categorie, catLabel)}</select></div>
       <div class="field" style="margin-top:12px"><span class="lbl">Qualité par défaut</span><select id="d-mode">${opts(['rapide', 'premium'], c.mode, x => x === 'rapide' ? '⚡ Rapide' : '💎 Premium')}</select></div>
       <div class="field" style="margin-top:12px"><span class="lbl">Durée par défaut</span><select id="d-dur"><option value="">Automatique (29 à 59 s)</option>${Array.from({ length: 31 }, (_, n) => n + 29).map(s => `<option value="${s}" ${String(c.duree) === String(s) ? 'selected' : ''}>${s} secondes</option>`).join('')}</select></div>
       <div style="margin-top:16px"><button class="btn" id="d-save">Enregistrer</button></div>
     </div>
+    <div class="card"><span class="lbl">Styles disponibles</span>
+      ${S.styles.map(s => `<p style="margin:0 0 10px"><b>${esc(styleLabel(s.skill))}</b><br><span class="muted small">${esc(s.desc)}</span></p>`).join('')}
+      <p class="hint small" style="margin:0">Les nouveaux agents du Creative Lab apparaissent ici tout seuls.</p></div>
     ${standalone ? '' : `<div class="card"><span class="lbl">Installer l'app</span>
       <p style="margin:0">📱 <b>iPhone</b> (Safari) : bouton Partager → <b>Sur l'écran d'accueil</b>.<br>🤖 <b>Android</b> (Chrome) : menu ⋮ → <b>Installer l'application</b>.</p></div>`}
     <div class="card"><span class="lbl">Compte</span>
@@ -679,11 +818,14 @@ async function saveDefaults() {
   try {
     const f = await api(RP('/contents/config/settings.yml?ref=main'));
     let txt = b64dec(f.content);
-    const set = (key, val) => { txt = txt.replace(new RegExp(`^(${key}:[ \\t]*)([^#\\n]*?)([ \\t]*#.*)?$`, 'm'), (_, a, __, cmt) => a + val + (cmt || '')); };
+    const set = (key, val) => {
+      const re = new RegExp(`^(${key}:[ \\t]*)([^#\\n]*?)([ \\t]*#.*)?$`, 'm');
+      txt = re.test(txt) ? txt.replace(re, (_, a, __, cmt) => a + val + (cmt || '')) : `${key}: ${val}\n` + txt;
+    };
     const dur = $('#d-dur').value;
-    set('ton', $('#d-ton').value); set('categorie', $('#d-cat').value); set('mode', $('#d-mode').value); set('duree', dur ? dur : '""');
+    set('style', $('#d-style').value); set('ton', $('#d-ton').value); set('categorie', $('#d-cat').value); set('mode', $('#d-mode').value); set('duree', dur ? dur : '""');
     await api(RP('/contents/config/settings.yml'), { method: 'PUT', body: { message: 'Réglages par défaut (app Studio)', content: b64enc(txt), sha: f.sha, branch: 'main' } });
-    Object.assign(S.cfg, jsyaml.load(txt)); S.form.mode = S.cfg.mode;
+    Object.assign(S.cfg, jsyaml.load(txt)); S.form.mode = S.cfg.mode; S.form.style = S.cfg.style;
     const c = storeJSON('config'); if (c) { c.cfg = S.cfg; storeJSON('config', c); }
     toast('✅ Réglages enregistrés');
   } catch (e) { b.insertAdjacentHTML('beforebegin', errorBox(e)); }
