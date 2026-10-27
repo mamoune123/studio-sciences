@@ -720,17 +720,25 @@ function renderBriefs() {
       <b style="display:block;font-size:16.5px;margin:8px 0">${esc(b.sujet || b.nom)}</b>
       <div class="tags">${st ? `<span class="tag">${esc(styleLabel(b.skill))} ${esc(b.vstyle)}</span>` : `<span class="tag">⚠️ ${esc(b.style || b.skill)} ${esc(b.vstyle)}</span>`}${b.format ? `<span class="tag">${esc(fmtLabel(b.format))} ${esc(b.vformat)}</span>` : ''}</div>
       ${run && !live && !done && run.conclusion !== 'success' ? `<p class="meta">Dernier essai : échec (${esc(ago(run.created_at))}).</p>` : ''}
+      ${!done && !live && !recent && st && !locked(b.skill) ? `<div class="row" style="margin-top:12px"><span class="lbl" style="margin:0">Durée</span>
+        <select class="bdur" id="bdur-${n}" style="width:auto">${durOpts(b.duree)}</select></div>` : ''}
       <details class="brief"><summary>Aperçu du brief</summary><pre>${esc(b.texte)}</pre></details>
       <div class="btns">${action}</div></div>`;
   }).join('');
   el.innerHTML = html;
-  el.querySelectorAll('[data-produce]').forEach(btn => btn.onclick = () => produceBrief(S.briefs[+btn.dataset.produce], btn));
+  el.querySelectorAll('[data-produce]').forEach(btn => btn.onclick = () => produceBrief(S.briefs[+btn.dataset.produce], btn, $('#bdur-' + btn.dataset.produce)?.value || ''));
 }
-async function produceBrief(b, btn) {
-  if (!confirm(`Produire ce brief ?\n\n${b.sujet}\n\n${styleName(b.skill)} · ${b.format || 'format auto'}`)) return;
+// durées proposées : la cible du brief (par défaut), puis 29–60 s et de 5 en 5 s jusqu'à duree_max
+function durOpts(cible) {
+  const max = S.cfg.duree_max || 150, list = [...Array.from({ length: 32 }, (_, n) => n + 29), ...Array.from({ length: Math.max(0, Math.floor((max - 60) / 5)) }, (_, n) => 65 + 5 * n)];
+  return (cible ? `<option value="" selected>${fmtDur(+cible)} (cible du brief)</option>` : '<option value="" selected>Automatique</option>')
+    + list.filter(s => String(s) !== String(cible)).map(s => `<option value="${s}">${fmtDur(s)}</option>`).join('');
+}
+async function produceBrief(b, btn, duree) {
+  if (!confirm(`Produire ce brief ?\n\n${b.sujet}\n\n${styleName(b.skill)} · ${b.format || 'format auto'} · ${fmtDur(+(duree || b.duree || 45))}`)) return;
   btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Envoi…';
   try {
-    await api(RP('/actions/workflows/generate.yml/dispatches'), { method: 'POST', body: { ref: 'main', inputs: { brief: b.nom } } });
+    await api(RP('/actions/workflows/generate.yml/dispatches'), { method: 'POST', body: { ref: 'main', inputs: duree ? { brief: b.nom, duree } : { brief: b.nom } } });
     S.briefLaunched[b.nom] = Date.now(); S.pending = { name: `📋 ${b.sujet || b.nom}`, t: Date.now() };
     toast('🎬 Brief lancé ! Suis la fabrication ici.'); go('runs');
   } catch (e) { btn.disabled = false; btn.textContent = '🎬 Produire ce brief'; btn.insertAdjacentHTML('afterend', errorBox(e)); }
