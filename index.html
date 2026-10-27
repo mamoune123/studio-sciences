@@ -47,7 +47,7 @@ a { color: inherit; }
 .icon-btn svg { width: 20px; height: 20px; }
 main { padding: 14px 16px calc(96px + var(--safe-b)); max-width: 640px; margin: 0 auto; }
 .tabs {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; display: grid; grid-template-columns: repeat(4, 1fr);
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; display: grid; grid-template-columns: repeat(5, 1fr);
   padding: 8px 8px calc(8px + var(--safe-b)); background: rgba(19, 14, 46, .88);
   backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); border-top: 1px solid rgba(255,255,255,.06);
 }
@@ -119,6 +119,11 @@ input[type=range]:disabled { opacity: .35; }
 .fgrid label span { display: block; font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin: 0 0 5px 2px; }
 .fgrid select { padding: 10px 32px 10px 12px; font-size: 15px; border-radius: 12px; }
 .link { color: var(--accent); font-weight: 700; font-size: 13.5px; padding: 4px 0; }
+
+details.brief { margin-top: 12px; }
+details.brief summary { color: var(--accent); font-weight: 700; font-size: 14px; cursor: pointer; }
+details.brief pre { white-space: pre-wrap; word-break: break-word; background: var(--bg2); border-radius: 12px; padding: 12px; font-size: 12.5px; line-height: 1.45; color: var(--muted); max-height: 60vh; overflow: auto; margin: 10px 0 0; }
+.tab { font-size: 10.5px; }
 
 /* ---------- topics ---------- */
 .topic { display: flex; gap: 12px; align-items: flex-start; }
@@ -194,6 +199,7 @@ input[type=range]:disabled { opacity: .35; }
   <section id="v-setup" class="hidden"></section>
   <section id="v-create" class="hidden"></section>
   <section id="v-topics" class="hidden"></section>
+  <section id="v-briefs" class="hidden"></section>
   <section id="v-runs" class="hidden"></section>
   <section id="v-videos" class="hidden"></section>
   <section id="v-settings" class="hidden"></section>
@@ -202,6 +208,7 @@ input[type=range]:disabled { opacity: .35; }
 <nav class="tabs hidden" id="tabs">
   <button class="tab" data-view="create"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.5L12 15l-1.8-4.5L5.5 9l4.7-1.4z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg>Créer</button>
   <button class="tab" data-view="topics"><svg class="i" viewBox="0 0 24 24"><path d="M3 6l2 2 3-3M3 13l2 2 3-3M12 6h9M12 13h9M12 20h9M4 20h1"/></svg>Sujets</button>
+  <button class="tab" data-view="briefs"><svg class="i" viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 10h6M9 14h6M9 18h3"/></svg>Briefs</button>
   <button class="tab" data-view="runs"><svg class="i" viewBox="0 0 24 24"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>Suivi<span class="badge hidden" id="runs-badge"></span></button>
   <button class="tab" data-view="videos"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M10 8.5v7l6-3.5z"/></svg>Vidéos</button>
 </nav>
@@ -245,7 +252,7 @@ const S = {
   cfg: {}, tons: {}, cats: {}, tonOpts: [], catOpts: [],
   form: { sujet: '', ton: 'défaut', categorie: 'défaut', mode: '', duree: '', style: '', format: '', catFree: '', catSave: false },
   vf: { sort: 'recent', style: '', cat: '', ton: '', format: '', q: '', ...(storeJSON('vfilter') || {}) },
-  issue: null, runs: [], runInfo: {}, names: storeJSON('names') || {}, pending: null, releases: [],
+  issue: null, briefs: null, briefDone: {}, briefTexts: {}, briefLaunched: {}, runs: [], runInfo: {}, names: storeJSON('names') || {}, pending: null, releases: [],
   timer: null, loaded: {},
 };
 
@@ -372,7 +379,7 @@ function go(view) {
   render(view, true);
 }
 function render(view, fresh) {
-  const f = { setup: renderSetup, create: renderCreate, topics: loadTopics, runs: refreshRuns, videos: loadVideos, settings: renderSettings }[view];
+  const f = { setup: renderSetup, create: renderCreate, topics: loadTopics, briefs: loadBriefs, runs: refreshRuns, videos: loadVideos, settings: renderSettings }[view];
   if (f) f(fresh);
   schedule();
 }
@@ -402,6 +409,7 @@ const ago = iso => {
   if (s < 86400) return `il y a ${Math.round(s / 3600)} h`;
   return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 };
+const fmtDur = s => s < 60 ? `${s} s` : `${Math.floor(s / 60)} min${s % 60 ? ' ' + String(s % 60).padStart(2, '0') : ''}`;
 const mins = (a, b) => Math.max(0, Math.round(((b ? new Date(b) : Date.now()) - new Date(a)) / 60000));
 
 // ---------- 1. connexion ----------
@@ -497,7 +505,7 @@ function renderCreate() {
       <div class="row"><span class="lbl" style="margin:0">Durée</span>
         <label class="switch">Auto <input type="checkbox" id="f-auto" ${autoDur ? 'checked' : ''}></label></div>
       <div style="margin-top:12px" class="row"><span class="big-val ${autoDur ? 'off' : ''}" id="dur-val"></span></div>
-      <input type="range" id="f-duree" min="29" max="59" step="1" value="${esc(f.duree || 45)}" ${autoDur ? 'disabled' : ''}>
+      <input type="range" id="f-duree" min="29" max="${esc(c.duree_max || 150)}" step="1" value="${esc(f.duree || 45)}" ${autoDur ? 'disabled' : ''}>
     </div>
     <div class="card">
       <span class="lbl">Qualité</span>
@@ -517,7 +525,7 @@ function renderCreate() {
     $('#cat-hint').textContent = f.categorie === 'autre' ? 'Écris le genre de vidéo que tu veux : Claude adapte le récit (ex. « Faits divers », « Sport »).'
       : (f.categorie === 'défaut' ? `Par défaut : ${catName(k)}. ` : '') + (ideas.length ? 'Idées : ' + ideas.join(', ') + '.' : '');
     const auto = $('#f-auto').checked;
-    $('#dur-val').textContent = auto ? (c.duree ? `Réglage par défaut : ${c.duree} s` : 'Automatique (29 à 59 s selon le sujet)') : `${$('#f-duree').value} s`;
+    $('#dur-val').textContent = auto ? (c.duree ? `Réglage par défaut : ${fmtDur(+c.duree)}` : `Automatique (29 s à ${fmtDur(c.duree_max || 150)} selon le sujet)`) : fmtDur(+$('#f-duree').value);
     $('#dur-val').classList.toggle('off', auto);
   };
   hints();
@@ -664,6 +672,70 @@ function topicSheet(line) {
   };
 }
 
+// ---------- 4. briefs prêts ----------
+// Briefs du Creative Lab (reports/briefs/, recopiés dans agents/briefs/ par sync_agents.py). Un fichier = un bloc :
+// « /<skill> », puis « ID : », « Sujet : », « Titre accroche : », « Format : x v0.1 · Style : y v1.0 », FOND, FORME.
+// « Produire » lance generate.yml avec brief=<nom> : le bloc est passé tel quel à Claude (scripts/prompts.py).
+function parseBrief(nom, md) {
+  const m = md.match(/```[^\n]*\n([\s\S]*?)```/), texte = (m ? m[1] : md).trim();
+  const get = k => ((texte.match(new RegExp('^' + k + '\\s*:\\s*(.+)$', 'm')) || [])[1] || '').trim();
+  const fl = get('Format'), fm = fl.match(/^([\w-]+)\s*(v[\d.]+)?/) || [], sm = fl.match(/Style\s*:\s*([^\s·]+)\s*(v[\d.]+)?/) || [];
+  const id = get('ID') || nom;
+  return { nom, texte, id, skill: texte.startsWith('/') ? texte.split('\n')[0].slice(1).trim() : '', sujet: get('Sujet'),
+    format: fm[1] || '', vformat: fm[2] || '', style: sm[1] || '', vstyle: sm[2] || '',
+    duree: (texte.match(/Durée cible\s*:\s*(\d+)/) || [])[1] || '', date: (id.match(/^\d{4}-\d{2}-\d{2}/) || nom.match(/^\d{4}-\d{2}-\d{2}/) || [])[0] || '' };
+}
+async function loadBriefs(fresh) {
+  const el = $('#v-briefs');
+  if (fresh && !S.briefs) loading(el, 'Chargement des briefs…');
+  try {
+    const [list, hist] = await Promise.all([
+      api(RP('/contents/agents/briefs?ref=main')).catch(e => { if (e.status === 404) return []; throw e; }),
+      api(RP('/contents/history/sujets.json?ref=main'), { raw: true }).then(t => JSON.parse(t)).catch(() => []),
+      refreshRuns(false, true)]);
+    const files = list.filter(f => f.name.endsWith('.md')).sort((a, b) => b.name.localeCompare(a.name)).slice(0, 40);
+    const texts = await Promise.all(files.map(async f => S.briefTexts[f.sha] || (S.briefTexts[f.sha] = await api(RP(`/contents/${f.path}?ref=main`), { raw: true }))));
+    S.briefs = files.map((f, i) => parseBrief(f.name.replace(/\.md$/, ''), texts[i]));
+    S.briefDone = Object.fromEntries(hist.filter(h => h.brief_id).map(h => [h.brief_id, h]));
+    renderBriefs();
+  } catch (e) { el.innerHTML = errorBox(e); }
+}
+const briefRun = b => S.runs.find(r => r.display_title === `Brief ${b.nom}`);
+function renderBriefs() {
+  const el = $('#v-briefs');
+  const fdate = d => d ? new Date(d + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }) : '';
+  let html = `<h1 class="title">Briefs prêts</h1><p class="lead">Les briefs du Creative Lab, du plus récent au plus ancien. Le brief est donné tel quel à Claude : fond et forme y sont déjà fixés.</p>`;
+  if (!S.briefs.length) html += `<div class="card empty"><div class="e">📋</div>Aucun brief pour l'instant. Ils arrivent chaque matin depuis le Creative Lab.</div>`;
+  html += S.briefs.map((b, n) => {
+    const done = S.briefDone[b.id], run = briefRun(b), live = run && run.status !== 'completed', st = styleOf(b.skill);
+    const recent = S.briefLaunched[b.nom] && Date.now() - S.briefLaunched[b.nom] < 120000;
+    let action;
+    if (done) action = `<span class="state ok">✅ Produit le ${esc(fdate(done.date))}</span>${done.lien ? `<a class="btn small ghost" href="${esc(done.lien)}" target="_blank" rel="noopener">🎬 Voir la vidéo</a>` : ''}`;
+    else if (live || recent) action = `<span class="state run">⏳ En production</span><button class="btn small ghost" data-goto="runs">Suivre</button>`;
+    else if (!st) action = `<div class="err-box" style="margin:0">Agent « ${esc(b.skill || '?')} » absent de agents/ : ce brief ne peut pas être produit pour l'instant (agent pas encore créé ou pas encore synchronisé).</div>`;
+    else if (locked(b.skill)) action = `<div class="err-box" style="margin:0">Style 3D : le rendu sur le Mac n'est pas activé (rendu_mac).</div>`;
+    else action = `<button class="btn small" data-produce="${n}">🎬 ${run && run.conclusion !== 'success' ? 'Relancer ce brief' : 'Produire ce brief'}</button>`;
+    return `<div class="card">
+      <div class="row small"><span class="muted">📋 ${esc(fdate(b.date))} · ${esc(b.id)}</span>${b.duree ? `<span class="muted">⏱ ${esc(fmtDur(+b.duree))}</span>` : ''}</div>
+      <b style="display:block;font-size:16.5px;margin:8px 0">${esc(b.sujet || b.nom)}</b>
+      <div class="tags">${st ? `<span class="tag">${esc(styleLabel(b.skill))} ${esc(b.vstyle)}</span>` : `<span class="tag">⚠️ ${esc(b.style || b.skill)} ${esc(b.vstyle)}</span>`}${b.format ? `<span class="tag">${esc(fmtLabel(b.format))} ${esc(b.vformat)}</span>` : ''}</div>
+      ${run && !live && !done && run.conclusion !== 'success' ? `<p class="meta">Dernier essai : échec (${esc(ago(run.created_at))}).</p>` : ''}
+      <details class="brief"><summary>Aperçu du brief</summary><pre>${esc(b.texte)}</pre></details>
+      <div class="btns">${action}</div></div>`;
+  }).join('');
+  el.innerHTML = html;
+  el.querySelectorAll('[data-produce]').forEach(btn => btn.onclick = () => produceBrief(S.briefs[+btn.dataset.produce], btn));
+}
+async function produceBrief(b, btn) {
+  if (!confirm(`Produire ce brief ?\n\n${b.sujet}\n\n${styleName(b.skill)} · ${b.format || 'format auto'}`)) return;
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Envoi…';
+  try {
+    await api(RP('/actions/workflows/generate.yml/dispatches'), { method: 'POST', body: { ref: 'main', inputs: { brief: b.nom } } });
+    S.briefLaunched[b.nom] = Date.now(); S.pending = { name: `📋 ${b.sujet || b.nom}`, t: Date.now() };
+    toast('🎬 Brief lancé ! Suis la fabrication ici.'); go('runs');
+  } catch (e) { btn.disabled = false; btn.textContent = '🎬 Produire ce brief'; btn.insertAdjacentHTML('afterend', errorBox(e)); }
+}
+
 // ---------- 4. suivi ----------
 function phaseOf(name) { return PHASES.findIndex(p => p.steps.some(s => name.startsWith(s))); }
 // jobs du run : « route » (choix du sujet, machine) puis « video » (sur GitHub, ou sur le Mac pour la 3D)
@@ -706,6 +778,8 @@ async function refreshRuns(fresh, quiet) {
   } catch (e) { if (!quiet) el.innerHTML = errorBox(e); }
 }
 function runTitle(r) {
+  const b = (S.briefs || []).find(x => r.display_title === `Brief ${x.nom}`);
+  if (b) return `📋 ${b.sujet || b.nom}`;
   const t = S.names[r.id] || r.display_title || '';
   return !t || t === 'Générer une vidéo' ? 'Vidéo' : t;
 }
@@ -760,7 +834,7 @@ function metaOf(rel) {
   const m = {}, line = (rel.body || '').split('\n').find(l => l.startsWith('Ton : ')) || '';
   for (const part of line.split(' · ')) { const i = part.indexOf(' : '); if (i > 0) m[part.slice(0, i).trim().toLowerCase()] = part.slice(i + 3).trim(); }
   return { ton: m.ton || '', cat: m['catégorie'] || '', mode: m.mode || '', style: m.style || FLAT, format: m.format && m.format !== 'auto' ? m.format : '',
-    duree: parseFloat(String(m['durée'] || '').replace(',', '.')) || null,
+    duree: parseFloat(String(m['durée'] || '').replace(',', '.')) || null, brief: m.brief || '',
     titre: (rel.name || rel.tag_name).replace(/\s*\(\d{4}-\d{2}-\d{2}\)\s*$/, ''), date: rel.published_at || rel.created_at };  // created_at = date du commit
 }
 const SORTS = { recent: 'Plus récentes', ancien: 'Plus anciennes', long: 'Plus longues', court: 'Plus courtes', az: 'Titre (A → Z)' };
@@ -802,7 +876,7 @@ function renderVList(all) {
     const mp4 = (r.assets || []).find(a => a.name.endsWith('.mp4')), d = descOf(r), i = S.releases.indexOf(r);
     return `<div class="card"><div class="vid"><div class="thumb">${CAT_EMOJI[m.cat] || (styleEmoji(m.style) === '🧊' ? '🧊' : '🎬')}</div><div class="info">
       <b>${esc(m.titre)}</b>
-      <div class="tags"><span class="tag">${esc(styleLabel(m.style))}</span>${m.ton ? `<span class="tag">${esc(tonLabel(m.ton))}</span>` : ''}${m.cat ? `<span class="tag">${esc(catLabel(m.cat))}</span>` : ''}${m.format ? `<span class="tag">${esc(fmtLabel(m.format))}</span>` : ''}${m.mode ? `<span class="tag">${m.mode === 'premium' ? '💎' : '⚡'} ${esc(m.mode)}</span>` : ''}</div>
+      <div class="tags"><span class="tag">${esc(styleLabel(m.style))}</span>${m.ton ? `<span class="tag">${esc(tonLabel(m.ton))}</span>` : ''}${m.cat ? `<span class="tag">${esc(catLabel(m.cat))}</span>` : ''}${m.format ? `<span class="tag">${esc(fmtLabel(m.format))}</span>` : ''}${m.mode ? `<span class="tag">${m.mode === 'premium' ? '💎' : '⚡'} ${esc(m.mode)}</span>` : ''}${m.brief ? `<span class="tag">📋 Brief ${esc(m.brief)}</span>` : ''}</div>
       <p class="meta">${new Date(m.date).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · ${ago(m.date)}${m.duree ? ` · ${Math.round(m.duree)} s` : ''}${mp4 ? ` · ${(mp4.size / 1048576).toFixed(0)} Mo` : ''}</p></div></div>
       ${d ? `<div class="desc">${esc(d)}</div>` : ''}
       <div class="btns">${mp4 ? `<a class="btn small" href="${esc(mp4.browser_download_url)}" target="_blank" rel="noopener">⬇️ Télécharger</a>` : ''}
@@ -828,7 +902,7 @@ async function renderSettings() {
       <div class="field" style="margin-top:12px"><span class="lbl">Ton par défaut</span><select id="d-ton">${opts(Object.keys(S.tons), c.ton, tonLabel)}</select></div>
       <div class="field" style="margin-top:12px"><span class="lbl">Catégorie par défaut</span><select id="d-cat">${opts(Object.keys(S.cats), c.categorie, catLabel)}</select></div>
       <div class="field" style="margin-top:12px"><span class="lbl">Qualité par défaut</span><select id="d-mode">${opts(['rapide', 'premium'], c.mode, x => x === 'rapide' ? '⚡ Rapide' : '💎 Premium')}</select></div>
-      <div class="field" style="margin-top:12px"><span class="lbl">Durée par défaut</span><select id="d-dur"><option value="">Automatique (29 à 59 s)</option>${Array.from({ length: 31 }, (_, n) => n + 29).map(s => `<option value="${s}" ${String(c.duree) === String(s) ? 'selected' : ''}>${s} secondes</option>`).join('')}</select></div>
+      <div class="field" style="margin-top:12px"><span class="lbl">Durée par défaut</span><select id="d-dur"><option value="">Automatique (29 s à ${fmtDur(c.duree_max || 150)})</option>${[...Array.from({ length: 31 }, (_, n) => n + 29), ...Array.from({ length: Math.max(0, Math.floor(((c.duree_max || 150) - 60) / 5)) }, (_, n) => 65 + 5 * n)].map(s => `<option value="${s}" ${String(c.duree) === String(s) ? 'selected' : ''}>${fmtDur(s)}</option>`).join('')}</select></div>
       <div style="margin-top:16px"><button class="btn" id="d-save">Enregistrer</button></div>
     </div>
     <div class="card"><span class="lbl">Styles disponibles</span>
